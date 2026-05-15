@@ -1,0 +1,16 @@
+{
+  "name": "stremio-m3u-addon",
+  "version": "1.0.0",
+  "description": "Addon de Stremio para reproducir películas y series desde una lista M3U personal",
+  "main": "addon.js",
+  "scripts": {
+    "start": "node addon.js"
+  },
+  "dependencies": {
+    "stremio-addon-sdk": "^1.6.10"
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "license": "MIT"
+}
