@@ -1,137 +1,231 @@
 # 🎬 Addon Stremio – Mi Lista M3U
 
-Addon personal para reproducir tus películas y series desde una lista M3U directamente en Stremio.
+Addon personal para reproducir películas y series desde una lista M3U remota directamente en Stremio usando Render.
 
 ---
 
 ## 📋 Requisitos
 
-- [Node.js](https://nodejs.org/) versión 14 o superior
-- [Stremio](https://www.stremio.com/) instalado
-- Tu lista M3U con las películas y series
+- Cuenta en GitHub
+- Cuenta en Render
+- Stremio instalado
+- Una lista M3U accesible mediante URL
 
 ---
 
-## 🚀 Instalación paso a paso
+## 🚀 Cómo funciona
 
-### 1. Instala las dependencias
+El addon:
+
+1. Descarga automáticamente tu lista M3U desde una URL remota
+2. Detecta películas y series
+3. Crea catálogos personalizados en Stremio
+4. Reproduce los streams directamente desde tu M3U
+
+---
+
+# 📁 Archivos del proyecto
+
+El proyecto debe contener:
+
+```txt
+addon.js
+parse-m3u.js
+package.json
+README.md
+```
+
+---
+
+# 🌐 Lista M3U remota
+
+Tu lista M3U debe estar disponible mediante una URL pública.
+
+Ejemplo:
+
+```txt
+https://github.com/usuario/repo/releases/download/iptv/lista.m3u
+```
+
+---
+
+# 🚀 Deploy en Render
+
+## 1. Subir el proyecto a GitHub
+
+Sube estos archivos a tu repositorio:
+
+- `addon.js`
+- `parse-m3u.js`
+- `package.json`
+- `README.md`
+
+NO subas:
+
+- `node_modules`
+- archivos locales `.m3u`
+- ngrok
+
+---
+
+## 2. Crear Web Service en Render
+
+Ve a:
+
+- https://render.com
+
+Luego:
+
+1. Presiona **New +**
+2. Selecciona **Web Service**
+3. Conecta tu repositorio GitHub
+4. Selecciona el repositorio del addon
+
+---
+
+## 3. Configuración Render
+
+### Build Command
 
 ```bash
 npm install
 ```
 
-### 2. Agrega tu lista M3U
-
-Copia tu archivo `.m3u` a la carpeta del proyecto y renómbralo a:
-```
-lista.m3u
-```
-
-O bien usa una ruta personalizada con la variable de entorno:
-```bash
-M3U_PATH=/ruta/a/tu/lista.m3u node addon.js
-```
-
-#### Formato requerido del M3U
-
-El addon detecta **películas** y **series** automáticamente:
-
-- **Series**: el título o nombre debe contener `S01E01` (temporada y episodio)
-- **Películas**: cualquier entrada que no tenga formato de serie
-
-Ejemplo:
-```
-#EXTM3U
-
-#EXTINF:-1 tvg-name="Breaking Bad S01E01" tvg-logo="URL_POSTER" group-title="Series",Breaking Bad S01E01
-http://tu-servidor.com/series/breaking_bad/s01e01.mkv
-
-#EXTINF:-1 tvg-name="El Padrino" tvg-logo="URL_POSTER" group-title="Películas",El Padrino
-http://tu-servidor.com/peliculas/el_padrino.mkv
-```
-
-### 3. Inicia el servidor del addon
+### Start Command
 
 ```bash
 npm start
 ```
 
-Verás en la consola:
-```
-✅ Lista cargada: 50 películas, 10 series
-🚀 Addon Stremio corriendo en: http://localhost:7000
-📡 URL para instalar en Stremio: http://localhost:7000/manifest.json
-```
+---
 
-### 4. Instala el addon en Stremio
+## 4. Variables de entorno
 
-1. Abre **Stremio**
-2. Ve al ícono de **🔍 Addons** (esquina superior derecha)
-3. Haz clic en **"Install from URL"** (o "Instalar desde URL")
-4. Pega esta URL:
-   ```
-   http://localhost:7000/manifest.json
-   ```
-5. Haz clic en **Install**
+En Render agrega esta variable:
 
-✅ ¡Listo! Ahora verás tus catálogos **"🎬 Mis Películas"** y **"📺 Mis Series"** en Stremio.
+| KEY | VALUE |
+|---|---|
+| `M3U_URL` | `https://github.com/Esmequiinn/txt-list/releases/download/iptv/Movies-Series.m3u` |
 
 ---
 
-## ⚙️ Variables de entorno
+# ▶ Instalar el addon en Stremio
 
-| Variable   | Default        | Descripción                        |
-|------------|----------------|------------------------------------|
-| `PORT`     | `7000`         | Puerto del servidor local          |
-| `M3U_PATH` | `./lista.m3u`  | Ruta a tu archivo de lista M3U     |
+Cuando Render termine el deploy, te dará una URL parecida a:
 
-Ejemplo con variables personalizadas:
-```bash
-PORT=8080 M3U_PATH=/home/usuario/mi_lista.m3u node addon.js
+```txt
+https://tu-addon.onrender.com
+```
+
+Tu manifest será:
+
+```txt
+https://tu-addon.onrender.com/manifest.json
 ```
 
 ---
 
-## 📁 Estructura del proyecto
+## Instalar en Stremio
 
+1. Abre Stremio
+2. Ve a **Addons**
+3. Selecciona **Install from URL**
+4. Pega:
+
+```txt
+https://tu-addon.onrender.com/manifest.json
 ```
-stremio-m3u-addon/
-├── addon.js          ← Servidor principal del addon
-├── parse-m3u.js      ← Parser del archivo M3U
-├── lista.m3u         ← Tu lista M3U (debes agregarla)
-├── lista.m3u.ejemplo ← Ejemplo del formato M3U
-├── package.json
-└── README.md
+
+5. Presiona **Install**
+
+---
+
+# 📺 Catálogos
+
+El addon crea:
+
+- 🎬 Mis Películas
+- 📺 Mis Series
+
+---
+
+# 🎞 Formato compatible del M3U
+
+## Películas
+
+```txt
+#EXTINF:-1 tvg-name="El Padrino" group-title="Películas",El Padrino
+http://servidor.com/movie.m3u8
 ```
 
 ---
 
-## 🔄 Actualizar la lista
+## Series
 
-El addon lee el archivo M3U **al iniciar**. Si cambias tu lista:
-1. Reemplaza el archivo `lista.m3u`
-2. Reinicia el servidor: `npm start`
+Las series deben contener formato:
 
----
+```txt
+S01E01
+```
 
-## 🌐 Uso desde otra red / dispositivo móvil
+Ejemplo:
 
-Si quieres acceder desde otro dispositivo en tu red local:
-1. Encuentra la IP local de tu computadora (ej: `192.168.1.100`)
-2. Usa la URL: `http://192.168.1.100:7000/manifest.json`
-
-Para acceso desde internet necesitarías usar un túnel como [ngrok](https://ngrok.com/):
-```bash
-ngrok http 7000
+```txt
+#EXTINF:-1 tvg-name="Breaking Bad S01E01" group-title="Series",Breaking Bad S01E01
+http://servidor.com/episode1.m3u8
 ```
 
 ---
 
-## ❓ Problemas comunes
+# ⚠ Importante
+
+Actualmente el addon funciona como catálogo privado.
+
+Eso significa que:
+
+✅ Verás:
+- Mis Películas
+- Mis Series
+
+❌ Pero NO aparecerá:
+- en búsquedas globales de Stremio
+- en películas oficiales del inicio
+- en Cinemeta
+
+Para eso sería necesario integrar IDs IMDb/TMDB.
+
+---
+
+# 🔄 Actualizar la lista
+
+Solo necesitas actualizar el archivo M3U remoto.
+
+Render descargará automáticamente la lista al reiniciar el servicio.
+
+Para reiniciar:
+
+1. Ve a Render
+2. Abre tu Web Service
+3. Presiona:
+   - Manual Deploy
+   - Deploy latest commit
+
+---
+
+# ❓ Problemas comunes
 
 | Problema | Solución |
-|----------|----------|
-| No aparecen las películas | Verifica que `lista.m3u` existe en la carpeta |
-| Las series no se agrupan | Asegúrate que el título tenga formato `S01E01` |
-| No reproduce el video | Verifica que las URLs de tu M3U sean accesibles |
-| Puerto en uso | Cambia el puerto: `PORT=7001 node addon.js` |
+|---|---|
+| No aparecen películas | Verifica que la URL M3U funciona |
+| Error cargando M3U | GitHub puede estar redireccionando |
+| No reproduce streams | Verifica que los enlaces IPTV funcionan |
+| Las series no se agrupan | El nombre debe contener `S01E01` |
+| Render tarda en abrir | El plan gratuito entra en modo sleep |
+
+---
+
+# ⚠ Nota sobre Render Free
+
+El plan gratuito de Render puede dormir el servidor después de inactividad.
+
+El primer stream o apertura puede tardar algunos segundos.
