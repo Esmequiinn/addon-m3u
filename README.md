@@ -144,8 +144,8 @@ https://tu-addon.onrender.com/manifest.json
 
 El addon crea:
 
-- 🎬 Mis Películas
-- 📺 Mis Series
+- Mis Películas
+- Mis Series
 
 ---
 
