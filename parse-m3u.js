@@ -1,19 +1,26 @@
 /**
  * parse-m3u.js
- * Parses an M3U playlist and groups items into movies and series.
- *
- * Supported M3U tags:
- *   #EXTINF:-1 tvg-name="..." tvg-logo="..." group-title="..." ,Title
- *
- * Series detection:
- *   - Filename or title contains  S##E##  (e.g. S01E03)
- *   - group-title contains "series", "serie", "show", "temporada"
+ * Compatible con IMDb IDs reales para integración global con Stremio
  */
 
-const SERIES_KEYWORDS = ["serie", "series", "show", "temporada", "season", "tv"];
-const SEASON_EP_RE = /[Ss](\d{1,2})[Ee](\d{1,2})/;
+const SERIES_KEYWORDS = [
+  "serie",
+  "series",
+  "show",
+  "temporada",
+  "season",
+  "tv"
+];
+
+const SEASON_EP_RE =
+  /[Ss](\d{1,2})[Ee](\d{1,2})/;
+
+// ─────────────────────────────────────────────
+// SLUG
+// ─────────────────────────────────────────────
 
 function slugify(str) {
+
   return str
     .toLowerCase()
     .replace(/\s+/g, "_")
@@ -21,24 +28,38 @@ function slugify(str) {
     .slice(0, 60);
 }
 
-/**
- * Parse a raw M3U string into an array of items.
- * @param {string} raw
- * @returns {{ title, url, logo, group, tvgName, tvgId }[]}
- */
+// ─────────────────────────────────────────────
+// PARSE M3U
+// ─────────────────────────────────────────────
+
 function parseM3U(raw) {
-  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  const lines =
+    raw
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean);
+
   const items = [];
+
   let current = null;
 
   for (const line of lines) {
+
     if (line.startsWith("#EXTINF")) {
+
       current = parseExtInf(line);
+
     } else if (line.startsWith("#")) {
-      // skip other directives
+
+      continue;
+
     } else if (current) {
+
       current.url = line;
+
       items.push(current);
+
       current = null;
     }
   }
@@ -46,98 +67,240 @@ function parseM3U(raw) {
   return items;
 }
 
+// ─────────────────────────────────────────────
+// PARSE EXTINF
+// ─────────────────────────────────────────────
+
 function parseExtInf(line) {
-  // Extract attributes from the tag
-  const attrStr = line.replace(/#EXTINF:[^,]*,?/, "");
-  const titleMatch = line.match(/,(.+)$/);
-  const title = titleMatch ? titleMatch[1].trim() : "Sin título";
 
-  const logo = extractAttr(line, "tvg-logo") || extractAttr(line, "tvg-logo-url") || null;
-  const group = extractAttr(line, "group-title") || "";
-  const tvgName = extractAttr(line, "tvg-name") || title;
-  const tvgId = extractAttr(line, "tvg-id") || null;
+  const titleMatch =
+    line.match(/,(.+)$/);
 
-  return { title, logo, group, tvgName, tvgId, url: null };
+  const title =
+    titleMatch
+      ? titleMatch[1].trim()
+      : "Sin título";
+
+  const logo =
+    extractAttr(line, "tvg-logo") ||
+    extractAttr(line, "tvg-logo-url") ||
+    null;
+
+  const group =
+    extractAttr(line, "group-title") ||
+    "";
+
+  const tvgName =
+    extractAttr(line, "tvg-name") ||
+    title;
+
+  const tvgId =
+    extractAttr(line, "tvg-id") ||
+    null;
+
+  return {
+
+    title,
+
+    logo,
+
+    group,
+
+    tvgName,
+
+    tvgId,
+
+    url: null
+  };
 }
+
+// ─────────────────────────────────────────────
+// EXTRAER ATRIBUTOS
+// ─────────────────────────────────────────────
 
 function extractAttr(str, attr) {
-  const re = new RegExp(`${attr}="([^"]*)"`, "i");
-  const m = str.match(re);
-  return m ? m[1].trim() : null;
+
+  const re =
+    new RegExp(`${attr}="([^"]*)"`, "i");
+
+  const m =
+    str.match(re);
+
+  return m
+    ? m[1].trim()
+    : null;
 }
 
-/**
- * Group parsed items into movies and series.
- * @param {object[]} items
- * @returns {{ movies: object[], series: object }}
- */
+// ─────────────────────────────────────────────
+// GROUP CONTENT
+// ─────────────────────────────────────────────
+
 function groupContent(items) {
+
   const movies = [];
-  const series = {};   // keyed by series slug id
+
+  const series = {};
 
   for (const item of items) {
-    const seMatch = SEASON_EP_RE.exec(item.title) || SEASON_EP_RE.exec(item.tvgName);
-    const groupLower = item.group.toLowerCase();
+
+    const seMatch =
+      SEASON_EP_RE.exec(item.title) ||
+      SEASON_EP_RE.exec(item.tvgName);
+
+    const groupLower =
+      item.group.toLowerCase();
+
     const isSeries =
       seMatch ||
-      SERIES_KEYWORDS.some(kw => groupLower.includes(kw));
+      SERIES_KEYWORDS.some(
+        kw => groupLower.includes(kw)
+      );
+
+    // ─────────────────────────────────────────
+    // SERIES
+    // ─────────────────────────────────────────
 
     if (isSeries && seMatch) {
-      // ── Series episode ────────────────────────────────────────────
-      const season = parseInt(seMatch[1], 10);
-      const episode = parseInt(seMatch[2], 10);
-      // Clean series name: everything before S##E##
-      const rawName = (item.tvgName || item.title).replace(SEASON_EP_RE, "").replace(/[-–_.\s]+$/, "").trim();
-      const seriesId = slugify(rawName) || slugify(item.group) || "serie_desconocida";
+
+      const season =
+        parseInt(seMatch[1], 10);
+
+      const episode =
+        parseInt(seMatch[2], 10);
+
+      const rawName =
+        (item.tvgName || item.title)
+          .replace(SEASON_EP_RE, "")
+          .replace(/[-–_.\s]+$/, "")
+          .trim();
+
+      // usar IMDb ID real si existe
+      const seriesId =
+        item.tvgId &&
+        item.tvgId.startsWith("tt")
+
+          ? item.tvgId
+
+          : slugify(rawName) ||
+            slugify(item.group) ||
+            "serie_desconocida";
 
       if (!series[seriesId]) {
+
         series[seriesId] = {
+
           id: seriesId,
+
           title: rawName || item.group,
+
           poster: item.logo || null,
-          genres: item.group ? [item.group] : [],
-          episodes: [],
+
+          genres:
+            item.group
+              ? [item.group]
+              : [],
+
+          episodes: []
         };
       }
+
       series[seriesId].episodes.push({
+
         season,
+
         episode,
-        title: `S${pad(season)}E${pad(episode)} - ${item.title}`,
-        url: item.url,
+
+        title:
+          `S${pad(season)}E${pad(episode)}`,
+
+        url: item.url
       });
+
     } else {
-      // ── Movie ─────────────────────────────────────────────────────
-      const movieId = slugify(item.tvgName || item.title) + "_" + Math.abs(hashCode(item.url));
+
+      // ───────────────────────────────────────
+      // MOVIES
+      // ───────────────────────────────────────
+
+      // usar IMDb ID real si existe
+      const movieId =
+
+        item.tvgId &&
+        item.tvgId.startsWith("tt")
+
+          ? item.tvgId
+
+          : slugify(item.tvgName || item.title) +
+            "_" +
+            Math.abs(hashCode(item.url));
+
       movies.push({
+
         id: movieId,
-        title: item.tvgName || item.title,
+
+        title:
+          item.tvgName || item.title,
+
         url: item.url,
-        poster: item.logo || null,
-        genres: item.group ? [item.group] : [],
+
+        poster:
+          item.logo || null,
+
+        genres:
+          item.group
+            ? [item.group]
+            : []
       });
     }
   }
 
-  // Sort series episodes
+  // ordenar episodios
   for (const s of Object.values(series)) {
+
     s.episodes.sort((a, b) =>
-      a.season !== b.season ? a.season - b.season : a.episode - b.episode
+
+      a.season !== b.season
+
+        ? a.season - b.season
+
+        : a.episode - b.episode
     );
   }
 
-  return { movies, series };
+  return {
+
+    movies,
+
+    series
+  };
 }
 
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+
 function pad(n) {
+
   return String(n).padStart(2, "0");
 }
 
 function hashCode(str) {
+
   let hash = 0;
+
   for (let i = 0; i < str.length; i++) {
-    hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
+
+    hash =
+      (Math.imul(31, hash) +
+        str.charCodeAt(i)) | 0;
   }
+
   return hash;
 }
 
-module.exports = { parseM3U, groupContent };
+module.exports = {
+
+  parseM3U,
+
+  groupContent
+};
