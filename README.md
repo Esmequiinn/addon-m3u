@@ -105,7 +105,7 @@ En Render agrega esta variable:
 
 | KEY | VALUE |
 |---|---|
-| `M3U_URL` | `https://github.com/Esmequiinn/txt-list/releases/download/iptv/Movies-Series.m3u` |
+| `M3U_URL` | `https://url/de/tu-lista/iptv/o-m3u/iptv/lista.m3u` |
 
 ---
 
