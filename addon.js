@@ -129,14 +129,14 @@ const manifest = {
     {
       type: "movie",
       id: "m3u_movies",
-      name: "🎬 Mis Películas",
+      name: "Mis Películas",
       extra: [{ name: "search", isRequired: false }],
     },
 
     {
       type: "series",
       id: "m3u_series",
-      name: "📺 Mis Series",
+      name: "Mis Series",
       extra: [{ name: "search", isRequired: false }],
     },
   ],
