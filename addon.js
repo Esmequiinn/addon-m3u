@@ -1,112 +1,68 @@
-const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
-const https = require("https");
-const { parseM3U, groupContent } = require("./parse-m3u");
+const { addonBuilder, serveHTTP } =
+  require("stremio-addon-sdk");
 
-// ─── CONFIG ─────────────────────────────────────────────────────────────────
+const fs = require("fs");
 
-const PORT = process.env.PORT || 7000;
+const path = require("path");
 
-const M3U_URL = process.env.M3U_URL;
+const {
+  parseM3U,
+  groupContent
+} = require("./parse-m3u");
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────
 
-// DATA
+const PORT =
+  process.env.PORT || 7000;
+
+const M3U_PATH =
+  process.env.M3U_PATH ||
+  path.join(__dirname, "lista.m3u");
+
+// ─────────────────────────────────────────────
+// LOAD LIST
+// ─────────────────────────────────────────────
 
 let movies = [];
+
 let series = {};
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DESCARGAR M3U
-// ─────────────────────────────────────────────────────────────────────────────
+function loadList() {
 
-function fetchM3U(url) {
+  if (!fs.existsSync(M3U_PATH)) {
 
-  return new Promise((resolve, reject) => {
-
-    https.get(url, {
-
-      headers: {
-        "User-Agent": "Mozilla/5.0"
-      }
-
-    }, (res) => {
-
-      // redirects GitHub Releases
-      if (
-        res.statusCode >= 300 &&
-        res.statusCode < 400 &&
-        res.headers.location
-      ) {
-
-        console.log("↪ Redirect detectado");
-
-        return resolve(fetchM3U(res.headers.location));
-      }
-
-      let data = "";
-
-      res.on("data", chunk => {
-        data += chunk;
-      });
-
-      res.on("end", () => {
-
-        console.log("📦 Tamaño descargado:", data.length);
-
-        resolve(data);
-      });
-
-    }).on("error", reject);
-
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CARGAR LISTA
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function loadList() {
-
-  if (!M3U_URL) {
-
-    console.warn("⚠ No se definió M3U_URL");
+    console.warn(
+      `⚠️ No se encontró: ${M3U_PATH}`
+    );
 
     return;
   }
 
-  try {
+  const raw =
+    fs.readFileSync(M3U_PATH, "utf8");
 
-    console.log("📥 Descargando lista M3U...");
+  const items =
+    parseM3U(raw);
 
-    const raw = await fetchM3U(M3U_URL);
+  const grouped =
+    groupContent(items);
 
-    console.log("📄 Parseando M3U...");
+  movies = grouped.movies;
 
-    const items = parseM3U(raw);
+  series = grouped.series;
 
-    console.log("📺 Items encontrados:", items.length);
-
-    const grouped = groupContent(items);
-
-    movies = grouped.movies;
-
-    series = grouped.series;
-
-    console.log(
-      `✅ Lista cargada: ${movies.length} películas, ${Object.keys(series).length} series`
-    );
-
-  } catch (err) {
-
-    console.error("❌ Error cargando M3U:", err);
-  }
+  console.log(
+    `✅ Lista cargada: ${movies.length} películas, ${Object.keys(series).length} series`
+  );
 }
 
 loadList();
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 // MANIFEST
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
 const manifest = {
 
@@ -116,194 +72,320 @@ const manifest = {
 
   name: "Mi Lista M3U",
 
-  description: "Películas y series desde tu lista M3U personal",
+  description:
+    "Películas y series desde lista M3U",
 
-  logo: "https://i.imgur.com/qKMZMBx.png",
+  logo:
+    "https://i.imgur.com/qKMZMBx.png",
 
-  resources: ["catalog", "stream", "meta"],
+  resources: [
+    "catalog",
+    "stream",
+    "meta"
+  ],
 
-  types: ["movie", "series"],
+  types: [
+    "movie",
+    "series"
+  ],
 
   catalogs: [
 
     {
       type: "movie",
+
       id: "m3u_movies",
+
       name: "Mis Películas",
-      extra: [{ name: "search", isRequired: false }],
+
+      extra: [
+        {
+          name: "search",
+          isRequired: false
+        }
+      ]
     },
 
     {
       type: "series",
+
       id: "m3u_series",
+
       name: "Mis Series",
-      extra: [{ name: "search", isRequired: false }],
-    },
+
+      extra: [
+        {
+          name: "search",
+          isRequired: false
+        }
+      ]
+    }
   ],
 
   behaviorHints: {
     adult: false,
     p2p: false
-  },
+  }
 };
 
-const builder = new addonBuilder(manifest);
+const builder =
+  new addonBuilder(manifest);
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 // CATALOG
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
-builder.defineCatalogHandler(({ type, id, extra }) => {
+builder.defineCatalogHandler(
+  ({ type, id, extra }) => {
 
-  const search =
-    (extra && extra.search)
-      ? extra.search.toLowerCase()
-      : null;
+    const search =
+      extra && extra.search
+        ? extra.search.toLowerCase()
+        : null;
 
-  if (type === "movie" && id === "m3u_movies") {
+    if (
+      type === "movie" &&
+      id === "m3u_movies"
+    ) {
 
-    let metas = movies.map(movieToMeta);
+      let metas =
+        movies.map(movieToMeta);
 
-    if (search) {
+      if (search) {
 
-      metas = metas.filter(m =>
-        m.name.toLowerCase().includes(search)
-      );
+        metas =
+          metas.filter(m =>
+            m.name
+              .toLowerCase()
+              .includes(search)
+          );
+      }
+
+      return Promise.resolve({
+        metas
+      });
     }
 
-    return Promise.resolve({ metas });
-  }
+    if (
+      type === "series" &&
+      id === "m3u_series"
+    ) {
 
-  if (type === "series" && id === "m3u_series") {
+      let metas =
+        Object.values(series)
+          .map(seriesToMeta);
 
-    let metas = Object.values(series).map(seriesToMeta);
+      if (search) {
 
-    if (search) {
+        metas =
+          metas.filter(m =>
+            m.name
+              .toLowerCase()
+              .includes(search)
+          );
+      }
 
-      metas = metas.filter(m =>
-        m.name.toLowerCase().includes(search)
-      );
+      return Promise.resolve({
+        metas
+      });
     }
 
-    return Promise.resolve({ metas });
+    return Promise.resolve({
+      metas: []
+    });
   }
+);
 
-  return Promise.resolve({ metas: [] });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 // META
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
-builder.defineMetaHandler(({ type, id }) => {
+builder.defineMetaHandler(
+  ({ type, id }) => {
 
-  if (type === "movie") {
+    if (type === "movie") {
 
-    const movie = movies.find(m => m.id === id);
+      const movie =
+        movies.find(m => m.id === id);
 
-    if (!movie) {
+      if (!movie)
+        return Promise.resolve({
+          meta: null
+        });
 
-      return Promise.resolve({ meta: null });
+      return Promise.resolve({
+        meta:
+          movieToFullMeta(movie)
+      });
+    }
+
+    if (type === "series") {
+
+      const show =
+        series[id];
+
+      if (!show)
+        return Promise.resolve({
+          meta: null
+        });
+
+      return Promise.resolve({
+        meta:
+          seriesToFullMeta(show, id)
+      });
     }
 
     return Promise.resolve({
-      meta: movieToFullMeta(movie)
+      meta: null
     });
   }
+);
 
-  if (type === "series") {
-
-    const show = series[id];
-
-    if (!show) {
-
-      return Promise.resolve({ meta: null });
-    }
-
-    return Promise.resolve({
-      meta: seriesToFullMeta(show, id)
-    });
-  }
-
-  return Promise.resolve({ meta: null });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 // STREAMS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
-builder.defineStreamHandler(({ type, id }) => {
+builder.defineStreamHandler(
+  ({ type, id }) => {
 
-  if (type === "movie") {
+    // ─────────────────────────────────────────
+    // MOVIES
+    // ─────────────────────────────────────────
 
-    const movie = movies.find(m => m.id === id);
+    if (type === "movie") {
 
-    if (!movie) {
+      const movie =
+        movies.find(m => m.id === id);
 
-      return Promise.resolve({ streams: [] });
+      if (!movie)
+        return Promise.resolve({
+          streams: []
+        });
+
+      return Promise.resolve({
+
+        streams: [
+
+          {
+            url: movie.url,
+
+            title:
+              detectLanguage(
+                movie.title
+              ),
+
+            name: "M3U"
+          }
+        ]
+      });
+    }
+
+    // ─────────────────────────────────────────
+    // SERIES
+    // ─────────────────────────────────────────
+
+    if (type === "series") {
+
+      const parts =
+        id.split(":");
+
+      const seriesId =
+        parts[0];
+
+      const season =
+        parseInt(parts[1], 10);
+
+      const episode =
+        parseInt(parts[2], 10);
+
+      const show =
+        series[seriesId];
+
+      if (!show)
+        return Promise.resolve({
+          streams: []
+        });
+
+      const ep =
+        (show.episodes || [])
+          .find(
+            e =>
+              e.season === season &&
+              e.episode === episode
+          );
+
+      if (!ep)
+        return Promise.resolve({
+          streams: []
+        });
+
+      return Promise.resolve({
+
+        streams: [
+
+          {
+            url: ep.url,
+
+            title:
+              detectLanguage(
+                ep.title
+              ),
+
+            name: "M3U"
+          }
+        ]
+      });
     }
 
     return Promise.resolve({
-
-      streams: [
-
-        {
-          url: movie.url,
-          title: "▶ Reproducir",
-          name: "M3U"
-        }
-      ]
+      streams: []
     });
   }
+);
 
-  if (type === "series") {
-
-    const parts = id.split(":");
-
-    const seriesId = parts[0];
-
-    const season = parseInt(parts[1], 10);
-
-    const episode = parseInt(parts[2], 10);
-
-    const show = series[seriesId];
-
-    if (!show) {
-
-      return Promise.resolve({ streams: [] });
-    }
-
-    const ep = (show.episodes || []).find(
-
-      e =>
-        e.season === season &&
-        e.episode === episode
-    );
-
-    if (!ep) {
-
-      return Promise.resolve({ streams: [] });
-    }
-
-    return Promise.resolve({
-
-      streams: [
-
-        {
-          url: ep.url,
-          title: `▶ S${pad(season)}E${pad(episode)}`,
-          name: "M3U"
-        }
-      ]
-    });
-  }
-
-  return Promise.resolve({ streams: [] });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 // HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+
+function detectLanguage(title) {
+
+  const t =
+    title.toLowerCase();
+
+  const langs = [];
+
+  if (
+    t.includes("latino")
+  ) {
+    langs.push("Latino");
+  }
+
+  if (
+    t.includes("castellano")
+  ) {
+    langs.push("Castellano");
+  }
+
+  if (
+    t.includes("english") ||
+    t.includes("ingles")
+  ) {
+    langs.push("Inglés");
+  }
+
+  if (
+    t.includes("sub")
+  ) {
+    langs.push("Sub");
+  }
+
+  if (langs.length === 0) {
+
+    return "M3U";
+  }
+
+  return langs.join(" • ");
+}
 
 function movieToMeta(m) {
 
@@ -315,11 +397,14 @@ function movieToMeta(m) {
 
     name: m.title,
 
-    poster: m.poster || makePosterUrl(m.title),
+    poster:
+      m.poster ||
+      makePosterUrl(m.title),
 
-    background: m.background || null,
+    background: null,
 
-    genres: m.genres || [],
+    genres:
+      m.genres || []
   };
 }
 
@@ -330,10 +415,7 @@ function movieToFullMeta(m) {
     ...movieToMeta(m),
 
     description:
-      m.description ||
-      "Película de tu lista M3U personal.",
-
-    year: m.year || null,
+      "Película desde lista M3U"
   };
 }
 
@@ -347,9 +429,12 @@ function seriesToMeta(s) {
 
     name: s.title,
 
-    poster: s.poster || makePosterUrl(s.title),
+    poster:
+      s.poster ||
+      makePosterUrl(s.title),
 
-    genres: s.genres || [],
+    genres:
+      s.genres || []
   };
 }
 
@@ -357,28 +442,31 @@ function seriesToFullMeta(s, id) {
 
   const seasons = {};
 
-  (s.episodes || []).forEach(ep => {
+  (s.episodes || [])
+    .forEach(ep => {
 
-    if (!seasons[ep.season]) {
+      if (!seasons[ep.season]) {
 
-      seasons[ep.season] = [];
-    }
+        seasons[ep.season] = [];
+      }
 
-    seasons[ep.season].push({
+      seasons[ep.season].push({
 
-      id: `${id}:${ep.season}:${ep.episode}`,
+        id:
+          `${id}:${ep.season}:${ep.episode}`,
 
-      title:
-        ep.title ||
-        `Episodio ${ep.episode}`,
+        title:
+          ep.title ||
 
-      season: ep.season,
+          `Episodio ${ep.episode}`,
 
-      number: ep.episode,
+        season:
+          ep.season,
 
-      overview: ep.description || "",
+        number:
+          ep.episode
+      });
     });
-  });
 
   return {
 
@@ -388,40 +476,37 @@ function seriesToFullMeta(s, id) {
 
     name: s.title,
 
-    poster: s.poster || makePosterUrl(s.title),
+    poster:
+      s.poster ||
+      makePosterUrl(s.title),
 
     description:
-      s.description ||
-      "Serie de tu lista M3U personal.",
+      "Serie desde lista M3U",
 
     videos:
       Object.entries(seasons)
-        .flatMap(([, eps]) => eps),
+        .flatMap(([, eps]) => eps)
   };
 }
 
 function makePosterUrl(title) {
 
-  const encoded =
-    encodeURIComponent(title);
-
-  return `https://via.placeholder.com/300x450/1a1a2e/ffffff?text=${encoded}`;
+  return `https://via.placeholder.com/300x450/1a1a2e/ffffff?text=${encodeURIComponent(title)}`;
 }
 
-function pad(n) {
-
-  return String(n).padStart(2, "0");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 // START
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
 
 serveHTTP(
   builder.getInterface(),
   { port: PORT }
 );
 
-console.log(`\n🚀 Addon Stremio corriendo en puerto ${PORT}`);
+console.log(
+  `🚀 Addon corriendo en puerto ${PORT}`
+);
 
-console.log(`📡 Manifest: /manifest.json\n`);
+console.log(
+  `📡 Manifest: /manifest.json`
+);
