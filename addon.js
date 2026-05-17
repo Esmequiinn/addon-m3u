@@ -1,7 +1,6 @@
 const { addonBuilder, serveHTTP } =
   require("stremio-addon-sdk");
 
-const axios = require("axios");
 
 const {
   parseM3U,
@@ -52,30 +51,21 @@ async function loadList() {
     );
 
     const response =
-      await axios.get(M3U_URL, {
+      await fetch(M3U_URL);
 
-        maxRedirects: 5,
+    if (!response.ok) {
 
-        responseType: "text",
-
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0"
-        }
-      });
-
-    if (
-      response.request?.res?.responseUrl !==
-      M3U_URL
-    ) {
-
-      console.log(
-        "↪ Redirect detectado"
+      throw new Error(
+        `HTTP ${response.status}`
       );
     }
 
+    console.log(
+      "↪ Redirect detectado"
+    );
+
     const raw =
-      response.data;
+      await response.text();
 
     console.log(
       `📦 Tamaño descargado: ${raw.length}`
