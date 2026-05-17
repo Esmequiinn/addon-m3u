@@ -214,9 +214,9 @@ Gracias a esto:
 El proyecto incluye:
 
 ```txt id="lci4m3"
-[clean-m3u.js]
+clean-m3u.js
 ```
-[clean-m3u.js](https://github.com/Esmequiinn/addon-m3u/releases/download/IMDBCD/clean-m3u.js)
+    [clean-m3u.js](https://github.com/Esmequiinn/addon-m3u/releases/download/IMDBCD/clean-m3u.js)
 
 Este script:
 
