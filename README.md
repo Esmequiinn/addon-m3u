@@ -101,7 +101,7 @@ la primera búsqueda consulta TMDB
 luego queda guardado en memoria
 no vuelve a consultar la API
 
-# ⚠️ Importante — Plan gratuito de Render
+⚠️ Importante — Plan gratuito de Render
 
 El cache vive en la memoria RAM del servidor, no en un archivo en disco.
 En el plan gratuito de Render el servicio se apaga automáticamente tras 15 minutos de inactividad. Cuando vuelve a arrancar, el cache se borra y la pre-carga comienza de nuevo.
