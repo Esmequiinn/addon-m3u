@@ -85,7 +85,6 @@ Gracias a esto:
 ✅ funcionan listas sin IMDb  
 ✅ funcionan listas nuevas  
 ✅ puedes mezclar listas  
-✅ ya no dependes completamente de `clean-m3u.js`
 
 ---
 
