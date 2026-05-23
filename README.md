@@ -34,16 +34,6 @@ Si una película tiene varios streams stremio mostrará varios resultados autom�
 
 ---
 
-## ✅ Integración global con Stremio
-
-El addon soporta:
-
-- IMDb IDs reales (`tt1234567`)
-- Matching automático con Cinemeta
-- Streams dentro de películas oficiales de Stremio
-
----
-
 ## ✅ Fallback automático por nombre
 
 Ahora el addon puede funcionar incluso si una lista NO tiene IMDb IDs.
@@ -72,10 +62,27 @@ Gracias a esto:
 
 ---
 
-## ✅ Cache automático
+## ✅ Integración global con Stremio
 
-El addon guarda coincidencias automáticamente.
+El addon soporta:
 
+- IMDb IDs reales (`tt1234567`)
+- Matching automático con Cinemeta
+- Streams dentro de películas oficiales de Stremio
+
+---
+
+## ✅ Resolución automática de IDs IMDb al arrancar
+El addon resuelve los IDs de IMDb directamente en Render sin necesidad de modificar tu lista M3U manualmente.
+Al arrancar, lanza en segundo plano un proceso que recorre todas las películas y series y consulta TMDB para obtener su ID de IMDb real (tt...).
+Este proceso usa un límite de ~3 consultas por segundo para no rebasar el límite gratuito de TMDB. Según el tamaño de tu lista puede tardar varios minutos. Durante ese tiempo el catálogo ya está disponible y funciona normalmente.
+Si la pre-carga aún no ha llegado a un título concreto, el addon lo resuelve en el momento en que abres ese título directamente desde el catálogo "Mis Películas" o "Mis Series".
+---
+⚠️ Los títulos cuyo ID todavía no se ha resuelto no aparecerán como streams dentro de las fichas globales de Stremio hasta que sean abiertos al menos una vez desde el catálogo del addon, o hasta que la pre-carga llegue a ellos.
+---
+
+✅ Cache automático
+El addon guarda en memoria todos los IDs que ya resolvió para no volver a consultarlos.
 Ejemplo:
 
 ```json
@@ -85,12 +92,15 @@ Ejemplo:
 }
 ```
 
-Así:
+la primera búsqueda consulta TMDB
+luego queda guardado en memoria
+no vuelve a consultar la API
 
-- la primera búsqueda consulta metadata
-- luego queda guardado
-- no vuelve a consultar APIs
-
+⚠️ Importante — Plan gratuito de Render
+El cache vive en la memoria RAM del servidor, no en un archivo en disco.
+En el plan gratuito de Render el servicio se apaga automáticamente tras 15 minutos de inactividad. Cuando vuelve a arrancar, el cache se borra y la pre-carga comienza de nuevo.
+Si quieres que el cache persista entre reinicios necesitas un plan de pago en Render, o una base de datos externa como [Upstash Redis](https://upstash.com/) (tiene tier gratuito).
+---
 
 # 🔑 Configurar TMDB API para búsqueda automática
 
@@ -137,7 +147,9 @@ Ejemplo:
 ```env
 TMDB_API_KEY=123abc456def789
 ```
-
+```txt
+⚠️ La variable debe llamarse exactamente TMDB_API_KEY con guiones bajos. Un nombre diferente como TMDB-KEY hace que el addon no encuentre la clave y nunca resuelva los IDs.
+```
 ---
 
 # ⚠ Importante
@@ -164,7 +176,6 @@ El proyecto debe contener:
 addon.js
 parse-m3u.js
 package.json
-cache.json (debe estar vacio al principio "{}"
 README.md
 ```
 
@@ -216,14 +227,6 @@ package.json
 cache.json
 README.md
 ```
-
-NO subas:
-
-```txt
-node_modules
-archivos locales .m3u
-```
-
 ---
 
 ## 2. Crear Web Service en Render
@@ -346,27 +349,6 @@ http://servidor.com/episode1.m3u8
 
 ---
 
-# 🌎 Detección automática de idioma
-
-El addon detecta automáticamente:
-
-- Latino
-- Castellano
-- Inglés
-- Multi Audio
-
-Basándose en el nombre del stream.
-
-Ejemplo:
-
-```txt
-Breaking Bad Latino
-Avatar Castellano
-Movie English
-```
-
----
-
 # 🎯 Integración global con IMDb IDs
 
 El addon soporta:
@@ -384,14 +366,11 @@ Gracias a esto:
 
 ---
 
-# 🛠 Procesamiento manual con clean-m3u.js agregar IMDb IDs automáticamente a tu lista M3U local (Opcional)
+# 🛠 Procesamiento manual con clean-m3u.js (Opcional)
+Si prefieres tener los IDs resueltos desde el primer segundo sin esperar la pre-carga automática del addon, puedes usar el script ```clean-m3u.js```
+para procesar tu lista manualmente antes de subirla.
 
-El proyecto incluye:
-
-```txt id="lci4m3"
-clean-m3u.js
-```
-[clean-m3u.js](https://github.com/Esmequiinn/addon-m3u/releases/download/IMDBCD/clean-m3u.js)
+[Descargar clean-m3u.js](https://github.com/Esmequiinn/addon-m3u/releases/download/IMDBCD/clean-m3u.js)
 
 Este script:
 
@@ -406,7 +385,7 @@ Este script:
 
 1. Crea cuenta en:
 
-[TMDB](https://www.themoviedb.org/signup?utm_source=chatgpt.com)
+[TMDB](https://www.themoviedb.org/signup?)
 
 2. Luego entra a:
 
@@ -443,54 +422,6 @@ por tu API real:
 ```js id="lci4m7"
 const API_KEY = "TU_API_KEY";
 ```
-
----
-
-# 🔑 Configurar Render
-
-Después de obtener tu URL directa, debes agregarla en Render.
-
-Ir a:
-
-```txt
-Render → Web Service → Environment
-```
-
-Agregar:
-
-```env
-M3U_URL=https://tu-link-directo.m3u
-```
-
-o múltiples listas:
-
-```env
-M3U_URLS=https://lista1.m3u,https://lista2.m3u
-```
-
----
-
-# 🚀 Resultado final
-
-Cuando Render inicie:
-
-- descargará automáticamente la lista
-- parseará películas y series
-- detectará streams
-- agrupará episodios
-- cargará IMDb IDs
-- integrará los streams directamente en Stremio
-
----
-
-
-# 📁 Archivos usados
-
-| Archivo              | Descripción                        |
-| -------------------- | ---------------------------------- |
-| `lista.m3u`          | Lista original (nunca se modifica) |
-| `lista-progress.m3u` | Lista procesada con IMDb IDs       |
-| `lista-backup.m3u`   | Backup automático                  |
 
 ---
 
@@ -711,6 +642,31 @@ Ahí podrás encontrar la URL real/directa del archivo.
 
 ---
 
+---
+
+# 🚀 Resultado final
+
+Cuando Render inicie:
+
+- descargará automáticamente la lista
+- parseará películas y series
+- detectará streams
+- agrupará episodios
+- cargará IMDb IDs
+- integrará los streams directamente en Stremio
+
+---
+
+
+# 📁 Archivos usados por el script
+
+| Archivo              | Descripción                        |
+| -------------------- | ---------------------------------- |
+| `lista.m3u`          | Lista original (nunca se modifica) |
+| `lista-progress.m3u` | Lista procesada con IMDb IDs       |
+| `lista-backup.m3u`   | Backup automático                  |
+
+
 
 # 🔄 Actualizar la lista
 
@@ -760,3 +716,47 @@ Con este sistema:
 ✅ compatibilidad con Cinemeta  
 ✅ cache automático  
 ✅ streams dentro de películas oficiales de Stremio
+
+
+## Hacer tu propio addon con Fork
+Si quieres usar este proyecto como base para crear tu propio addon personal, puedes hacerlo fácilmente con Fork en GitHub. 
+---
+
+# ¿Qué es un Fork?
+Un Fork es una copia completa del repositorio en tu propia cuenta de GitHub. Obtienes todo el código listo para usar, y puedes modificarlo como quieras sin afectar el original.
+---
+# Pasos para hacer Fork y tener tu propio addon
+# 1. Hacer Fork del repositorio
+
+  Ir a:
+
+```txt
+https://github.com/Esmequiinn/addon-m3u
+```
+2. Presionar el botón Fork (arriba a la derecha)
+3. Seleccionar tu cuenta de GitHub
+4. Presionar Create Fork
+
+Ahora tienes una copia exacta del proyecto en tu cuenta.
+---
+
+# 2. Crear tu Web Service en Render
+
+Ir a https://render.com
+New + → Web Service
+Conectar GitHub
+Seleccionar tu fork (no el repositorio original)
+
+
+# 3. Configurar tus propias variables de entorno
+En tu Web Service de Render, ir a Environment y agregar:
+
+| KEY                  | VALUE                              |
+| -------------------- | ---------------------------------- |
+| `TMDB_API_KEY`       | Tu propia API Key de TMDB          |
+| `M3U_URLS`           | Tus propias URLs de listas M3U     |
+
+
+# 4. Instalar en Stremio
+Cuando Render termine el deploy, copiar tu URL y pegarla en Stremio:
+```https://tu-propio-addon.onrender.com/manifest.json ```
