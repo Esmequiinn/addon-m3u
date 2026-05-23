@@ -1,14 +1,18 @@
-const { addonBuilder, serveHTTP } =
-  require("stremio-addon-sdk");
+const fs =
+  require("fs");
+
+const {
+  addonBuilder,
+  serveHTTP
+} = require("stremio-addon-sdk");
 
 const {
   parseM3U,
-  groupContent
+  groupContent,
+  slugify
 } = require("./parse-m3u");
 
-// ─────────────────────────────────────────────
-// CONFIG
-// ─────────────────────────────────────────────
+// ─────────────────────────────
 
 const PORT =
   process.env.PORT || 7000;
@@ -16,109 +20,155 @@ const PORT =
 const M3U_URL =
   process.env.M3U_URL;
 
-// ─────────────────────────────────────────────
-// VALIDAR URL
-// ─────────────────────────────────────────────
+const TMDB_KEY =
+  process.env.TMDB_KEY;
 
-if (!M3U_URL) {
-
-  console.error(
-    "❌ M3U_URL no configurado"
-  );
-
-  process.exit(1);
-}
-
-// ─────────────────────────────────────────────
-// STORAGE
-// ─────────────────────────────────────────────
+// ─────────────────────────────
 
 let movies = [];
-
 let series = {};
 
-// ─────────────────────────────────────────────
+let cache = {};
+
+if (fs.existsSync("cache.json")) {
+
+  cache =
+    JSON.parse(
+      fs.readFileSync(
+        "cache.json",
+        "utf8"
+      )
+    );
+}
+
+// ─────────────────────────────
 // LOAD LIST
-// ─────────────────────────────────────────────
+// ─────────────────────────────
 
 async function loadList() {
 
+  console.log(
+    "📥 Descargando lista..."
+  );
+
+  const res =
+    await fetch(M3U_URL);
+
+  const raw =
+    await res.text();
+
+  const items =
+    parseM3U(raw);
+
+  const grouped =
+    groupContent(items);
+
+  movies =
+    grouped.movies;
+
+  series =
+    grouped.series;
+
+  console.log(
+    `✅ ${movies.length} películas`
+  );
+}
+
+// ─────────────────────────────
+// TMDB SEARCH
+// ─────────────────────────────
+
+async function searchTMDB(
+  title,
+  type = "movie"
+) {
+
+  const slug =
+    slugify(title);
+
+  if (cache[slug]) {
+
+    return cache[slug];
+  }
+
   try {
 
-    console.log(
-      "📥 Descargando lista M3U..."
-    );
+    const endpoint =
+      type === "series"
+        ? "tv"
+        : "movie";
 
-    const response =
-      await fetch(M3U_URL);
+    const url =
+      `https://api.themoviedb.org/3/search/${endpoint}?api_key=${TMDB_KEY}&query=${encodeURIComponent(title)}&language=es-MX`;
 
-    if (!response.ok) {
+    const res =
+      await fetch(url);
 
-      throw new Error(
-        `HTTP ${response.status}`
-      );
+    const data =
+      await res.json();
+
+    if (
+      !data.results ||
+      !data.results.length
+    ) {
+
+      return null;
     }
 
-    const raw =
-      await response.text();
+    const first =
+      data.results[0];
 
-    console.log(
-      `📦 Tamaño descargado: ${raw.length}`
+    const external =
+      await fetch(
+        `https://api.themoviedb.org/3/${endpoint}/${first.id}/external_ids?api_key=${TMDB_KEY}`
+      );
+
+    const ext =
+      await external.json();
+
+    if (!ext.imdb_id) {
+
+      return null;
+    }
+
+    cache[slug] =
+      ext.imdb_id;
+
+    fs.writeFileSync(
+      "cache.json",
+      JSON.stringify(
+        cache,
+        null,
+        2
+      )
     );
 
     console.log(
-      "📄 Parseando M3U..."
+      `💾 Cacheado: ${title}`
     );
 
-    const items =
-      parseM3U(raw);
+    return ext.imdb_id;
 
-    console.log(
-      `📺 Items encontrados: ${items.length}`
-    );
+  } catch {
 
-    const grouped =
-      groupContent(items);
-
-    movies =
-      grouped.movies;
-
-    series =
-      grouped.series;
-
-    console.log(
-      `✅ Lista cargada: ${movies.length} películas, ${Object.keys(series).length} series`
-    );
-
-  } catch (err) {
-
-    console.error(
-      "❌ Error cargando M3U:"
-    );
-
-    console.error(
-      err.message
-    );
+    return null;
   }
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────
 // MANIFEST
-// ─────────────────────────────────────────────
+// ─────────────────────────────
 
 const manifest = {
 
-  id: "com.miaddon.m3u",
+  id: "com.m3u.global",
 
   version: "1.0.0",
 
   name: "Mi Lista M3U",
 
   description:
-    "Películas y series desde lista M3U",
-
-  logo:
-    "https://i.imgur.com/qKMZMBx.png",
+    "M3U Global",
 
   resources: [
     "catalog",
@@ -135,101 +185,68 @@ const manifest = {
 
     {
       type: "movie",
-
       id: "m3u_movies",
-
-      name: "Mis Películas",
-
-      extra: [
-        {
-          name: "search",
-          isRequired: false
-        }
-      ]
+      name: "Mis Películas"
     },
 
     {
       type: "series",
-
       id: "m3u_series",
-
-      name: "Mis Series",
-
-      extra: [
-        {
-          name: "search",
-          isRequired: false
-        }
-      ]
+      name: "Mis Series"
     }
-  ],
-
-  behaviorHints: {
-    adult: false,
-    p2p: false
-  }
+  ]
 };
 
 const builder =
   new addonBuilder(manifest);
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────
 // CATALOG
-// ─────────────────────────────────────────────
+// ─────────────────────────────
 
 builder.defineCatalogHandler(
-  ({ type, id, extra }) => {
+  ({ type, id }) => {
 
-    const search =
-      extra?.search
-        ?.toLowerCase() || null;
-
-    // MOVIES
     if (
-      type === "movie" &&
-      id === "m3u_movies"
+      type === "movie"
     ) {
 
-      let metas =
-        movies.map(movieToMeta);
-
-      if (search) {
-
-        metas =
-          metas.filter(m =>
-            m.name
-              .toLowerCase()
-              .includes(search)
-          );
-      }
-
       return Promise.resolve({
-        metas
+
+        metas:
+          movies.map(m => ({
+
+            id: m.id,
+
+            type: "movie",
+
+            name: m.title,
+
+            poster:
+              m.poster
+          }))
       });
     }
 
-    // SERIES
     if (
-      type === "series" &&
-      id === "m3u_series"
+      type === "series"
     ) {
 
-      let metas =
-        Object.values(series)
-          .map(seriesToMeta);
-
-      if (search) {
-
-        metas =
-          metas.filter(m =>
-            m.name
-              .toLowerCase()
-              .includes(search)
-          );
-      }
-
       return Promise.resolve({
-        metas
+
+        metas:
+          Object.values(series)
+            .map(s => ({
+
+              id: s.id,
+
+              type: "series",
+
+              name: s.title,
+
+              poster:
+                s.poster
+            }))
       });
     }
 
@@ -239,87 +256,30 @@ builder.defineCatalogHandler(
   }
 );
 
-// ─────────────────────────────────────────────
-// META
-// ─────────────────────────────────────────────
-
-builder.defineMetaHandler(
-  ({ type, id }) => {
-
-    // MOVIES
-    if (type === "movie") {
-
-      const movie =
-        movies.find(
-          m => m.id === id
-        );
-
-      if (!movie) {
-
-        return Promise.resolve({
-          meta: null
-        });
-      }
-
-      return Promise.resolve({
-
-        meta:
-          movieToFullMeta(movie)
-      });
-    }
-
-    // SERIES
-    if (type === "series") {
-
-      const show =
-        series[id];
-
-      if (!show) {
-
-        return Promise.resolve({
-          meta: null
-        });
-      }
-
-      return Promise.resolve({
-
-        meta:
-          seriesToFullMeta(show, id)
-      });
-    }
-
-    return Promise.resolve({
-      meta: null
-    });
-  }
-);
-
-// ─────────────────────────────────────────────
+// ─────────────────────────────
 // STREAMS
-// ─────────────────────────────────────────────
+// ─────────────────────────────
 
 builder.defineStreamHandler(
-  ({ type, id }) => {
+  async ({ type, id }) => {
 
-    // ─────────────────────────────────────────
     // MOVIES
-    // ─────────────────────────────────────────
-
     if (type === "movie") {
 
       const movie =
         movies.find(
-          m => m.id === id
+          m =>
+            m.id === id
         );
 
       if (!movie) {
 
-        return Promise.resolve({
+        return {
           streams: []
-        });
+        };
       }
 
-      return Promise.resolve({
+      return {
 
         streams:
 
@@ -328,183 +288,66 @@ builder.defineStreamHandler(
             url: s.url,
 
             title:
-              `${s.language}`,
+              s.language,
 
             name: "M3U"
           }))
-      });
+      };
     }
 
-    // ─────────────────────────────────────────
     // SERIES
-    // ─────────────────────────────────────────
-
     if (type === "series") {
 
-      const parts =
-        id.split(":");
-
-      const seriesId =
-        parts[0];
-
-      const season =
-        parseInt(parts[1], 10);
-
-      const episode =
-        parseInt(parts[2], 10);
+      const [
+        seriesId,
+        season,
+        episode
+      ] = id.split(":");
 
       const show =
         series[seriesId];
 
       if (!show) {
 
-        return Promise.resolve({
+        return {
           streams: []
-        });
+        };
       }
 
-      const episodes =
-
+      const eps =
         show.episodes.filter(
           e =>
-            e.season === season &&
-            e.episode === episode
+
+            e.season ==
+              season &&
+
+            e.episode ==
+              episode
         );
 
-      if (!episodes.length) {
+      return {
 
-        return Promise.resolve({
-          streams: []
-        });
-      }
+        streams:
 
-      const streams = [];
+          eps.map(ep => ({
 
-      episodes.forEach(ep => {
+            url: ep.url,
 
-        if (ep.streams) {
+            title:
+              ep.language,
 
-          ep.streams.forEach(s => {
-
-            streams.push({
-
-              url: s.url,
-
-              title:
-                `${s.language}`,
-
-              name: "M3U"
-            });
-          });
-        }
-      });
-
-      return Promise.resolve({
-        streams
-      });
+            name: "M3U"
+          }))
+      };
     }
 
-    return Promise.resolve({
+    return {
       streams: []
-    });
+    };
   }
 );
 
-// ─────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────
-
-function movieToMeta(m) {
-
-  return {
-
-    id: m.id,
-
-    type: "movie",
-
-    name: m.title,
-
-    poster: m.poster,
-
-    genres:
-      m.genres || []
-  };
-}
-
-function movieToFullMeta(m) {
-
-  return {
-
-    ...movieToMeta(m),
-
-    description:
-      "Película desde lista M3U"
-  };
-}
-
-function seriesToMeta(s) {
-
-  return {
-
-    id: s.id,
-
-    type: "series",
-
-    name: s.title,
-
-    poster: s.poster,
-
-    genres:
-      s.genres || []
-  };
-}
-
-function seriesToFullMeta(s, id) {
-
-  const seasons = {};
-
-  s.episodes.forEach(ep => {
-
-    if (!seasons[ep.season]) {
-
-      seasons[ep.season] = [];
-    }
-
-    seasons[ep.season].push({
-
-      id:
-        `${id}:${ep.season}:${ep.episode}`,
-
-      title:
-        ep.title,
-
-      season:
-        ep.season,
-
-      number:
-        ep.episode
-    });
-  });
-
-  return {
-
-    id,
-
-    type: "series",
-
-    name: s.title,
-
-    poster: s.poster,
-
-    videos:
-      Object.values(seasons)
-        .flat()
-  };
-}
-
-// ─────────────────────────────────────────────
-// START
-// ─────────────────────────────────────────────
+// ─────────────────────────────
 
 (async () => {
 
@@ -516,10 +359,6 @@ function seriesToFullMeta(s, id) {
   );
 
   console.log(
-    `🚀 Addon corriendo en puerto ${PORT}`
-  );
-
-  console.log(
-    `📡 Manifest: /manifest.json`
+    `🚀 Puerto ${PORT}`
   );
 })();
