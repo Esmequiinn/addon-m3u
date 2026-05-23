@@ -8,6 +8,7 @@ Addon personal para reproducir películas y series desde una lista M3U remota di
 
 - Cuenta en GitHub
 - Cuenta en Render
+- Cuenta en [TMDB](https://www.themoviedb.org/) y una API Key gratuita
 - Stremio instalado
 - Una o varias listas M3U accesibles mediante URL
 
@@ -29,24 +30,7 @@ El addon:
 
 ---
 
-Si una película tiene varios streams:
-
-- Latino
-- Castellano
-- Inglés
-
-Stremio mostrará varios resultados automáticamente.
-
-Ejemplo:
-
-M3U  
-🌎 Latino
-
-M3U  
-🇪🇸 Castellano
-
-M3U  
-🇺🇸 Inglés
+Si una película tiene varios streams stremio mostrará varios resultados automáticamente.
 
 ---
 
