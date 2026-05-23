@@ -722,6 +722,7 @@ Con este sistema:
 ✅ cache automático  
 ✅ streams dentro de películas oficiales de Stremio
 
+---
 
 ## Hacer tu propio addon con Fork
 
@@ -767,5 +768,4 @@ En tu Web Service de Render, ir a Environment y agregar:
 
 
 4. Instalar en Stremio
-Cuando Render termine el deploy, copiar tu URL y pegarla en Stremio:
-```https://tu-propio-addon.onrender.com/manifest.json ```
+Cuando Render termine el deploy, copiar tu URL y pegarla en Stremio
