@@ -328,7 +328,7 @@ builder.defineStreamHandler(
             url: s.url,
 
             title:
-              `${s.language}\n${s.quality}`,
+              `${s.language}`,
 
             name: "M3U"
           }))
@@ -378,19 +378,29 @@ builder.defineStreamHandler(
         });
       }
 
+      const streams = [];
+
+      episodes.forEach(ep => {
+
+        if (ep.streams) {
+
+          ep.streams.forEach(s => {
+
+            streams.push({
+
+              url: s.url,
+
+              title:
+                `${s.language}`,
+
+              name: "M3U"
+            });
+          });
+        }
+      });
+
       return Promise.resolve({
-
-        streams:
-
-          episodes.map(ep => ({
-
-            url: ep.url,
-
-            title:
-              `${ep.language}\n${ep.quality}`,
-
-            name: "M3U"
-          }))
+        streams
       });
     }
 
