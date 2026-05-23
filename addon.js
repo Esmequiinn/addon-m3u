@@ -1,6 +1,10 @@
 const { addonBuilder, serveHTTP } =
   require("stremio-addon-sdk");
 
+const fs = require("fs");
+
+// ─────────────────────────────────────────────
+
 const {
   parseM3U,
   groupContent
@@ -13,7 +17,9 @@ const {
 const PORT =
   process.env.PORT || 7000;
 
-// MULTI URLS
+const TMDB_API_KEY =
+  process.env.TMDB_API_KEY;
+
 const M3U_URLS =
   process.env.M3U_URLS
     ? process.env.M3U_URLS
@@ -34,10 +40,37 @@ if (
 if (!M3U_URLS.length) {
 
   console.error(
-    "❌ No configuraste M3U_URL o M3U_URLS"
+    "❌ No configuraste M3U_URL"
   );
 
   process.exit(1);
+}
+
+// ─────────────────────────────────────────────
+// CACHE
+// ─────────────────────────────────────────────
+
+const CACHE_FILE =
+  "./tmdb-cache.json";
+
+let cache = {};
+
+if (fs.existsSync(CACHE_FILE)) {
+
+  try {
+
+    cache =
+      JSON.parse(
+        fs.readFileSync(
+          CACHE_FILE,
+          "utf8"
+        )
+      );
+
+  } catch {
+
+    cache = {};
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -47,6 +80,141 @@ if (!M3U_URLS.length) {
 let movies = [];
 
 let series = {};
+
+// ─────────────────────────────────────────────
+// NORMALIZE
+// ─────────────────────────────────────────────
+
+function normalize(str = "") {
+
+  return str
+    .toLowerCase()
+
+    .normalize("NFD")
+
+    .replace(/[\u0300-\u036f]/g, "")
+
+    .replace(
+      /\b(19|20)\d{2}\b/g,
+      ""
+    )
+
+    .replace(
+      /1080p|720p|2160p|4k|hdr|webrip|bluray|x264|x265/gi,
+      ""
+    )
+
+    .replace(
+      /latino|castellano|dual|subtitulado|sub/gi,
+      ""
+    )
+
+    .replace(
+      /s\d{1,2}e\d{1,2}/gi,
+      ""
+    )
+
+    .replace(/[^a-z0-9]/g, " ")
+
+    .replace(/\s+/g, " ")
+
+    .trim();
+}
+
+// ─────────────────────────────────────────────
+// TMDB SEARCH
+// ─────────────────────────────────────────────
+
+async function searchTMDB(
+  title,
+  type
+) {
+
+  if (!TMDB_API_KEY) {
+    return null;
+  }
+
+  const clean =
+    normalize(title);
+
+  // cache
+  if (cache[clean]) {
+
+    return cache[clean];
+  }
+
+  try {
+
+    console.log(
+      `🔎 TMDB: ${clean}`
+    );
+
+    const endpoint =
+      type === "series"
+        ? "tv"
+        : "movie";
+
+    const url =
+      `https://api.themoviedb.org/3/search/${endpoint}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(clean)}&language=es-MX`;
+
+    const response =
+      await fetch(url);
+
+    const data =
+      await response.json();
+
+    if (
+      !data.results ||
+      !data.results.length
+    ) {
+
+      return null;
+    }
+
+    const first =
+      data.results[0];
+
+    const detailsUrl =
+      `https://api.themoviedb.org/3/${endpoint}/${first.id}/external_ids?api_key=${TMDB_API_KEY}`;
+
+    const detailsResponse =
+      await fetch(detailsUrl);
+
+    const details =
+      await detailsResponse.json();
+
+    if (!details.imdb_id) {
+
+      return null;
+    }
+
+    cache[clean] =
+      details.imdb_id;
+
+    fs.writeFileSync(
+      CACHE_FILE,
+      JSON.stringify(
+        cache,
+        null,
+        2
+      )
+    );
+
+    console.log(
+      `✅ Cacheado: ${clean} → ${details.imdb_id}`
+    );
+
+    return details.imdb_id;
+
+  } catch (err) {
+
+    console.log(
+      `❌ TMDB error: ${title}`
+    );
+
+    return null;
+  }
+}
 
 // ─────────────────────────────────────────────
 // LOAD LISTS
@@ -70,7 +238,7 @@ async function loadList() {
       if (!response.ok) {
 
         console.log(
-          `❌ Error HTTP ${response.status}`
+          `❌ HTTP ${response.status}`
         );
 
         continue;
@@ -79,23 +247,15 @@ async function loadList() {
       const raw =
         await response.text();
 
-      console.log(
-        `📦 Tamaño: ${raw.length}`
-      );
-
       const items =
         parseM3U(raw);
 
       console.log(
-        `📺 Items encontrados: ${items.length}`
+        `📺 ${items.length} items`
       );
 
       allItems.push(...items);
     }
-
-    console.log(
-      `🎬 Total items: ${allItems.length}`
-    );
 
     const grouped =
       groupContent(allItems);
@@ -107,18 +267,16 @@ async function loadList() {
       grouped.series;
 
     console.log(
-      `✅ Lista cargada: ${movies.length} películas, ${Object.keys(series).length} series`
+      `✅ ${movies.length} películas`
+    );
+
+    console.log(
+      `✅ ${Object.keys(series).length} series`
     );
 
   } catch (err) {
 
-    console.error(
-      "❌ Error cargando listas:"
-    );
-
-    console.error(
-      err.message
-    );
+    console.error(err);
   }
 }
 
@@ -130,15 +288,12 @@ const manifest = {
 
   id: "com.esmequinn.m3u",
 
-  version: "2.0.0",
+  version: "3.0.0",
 
   name: "M3U",
 
   description:
-    "Addon IPTV M3U para Stremio",
-
-  logo:
-    "https://i.imgur.com/qKMZMBx.png",
+    "M3U IPTV Addon",
 
   resources: [
     "catalog",
@@ -155,39 +310,16 @@ const manifest = {
 
     {
       type: "movie",
-
       id: "m3u_movies",
-
-      name: "Mis Películas",
-
-      extra: [
-        {
-          name: "search",
-          isRequired: false
-        }
-      ]
+      name: "Mis Películas"
     },
 
     {
       type: "series",
-
       id: "m3u_series",
-
-      name: "Mis Series",
-
-      extra: [
-        {
-          name: "search",
-          isRequired: false
-        }
-      ]
+      name: "Mis Series"
     }
-  ],
-
-  behaviorHints: {
-    adult: false,
-    p2p: false
-  }
+  ]
 };
 
 const builder =
@@ -198,64 +330,34 @@ const builder =
 // ─────────────────────────────────────────────
 
 builder.defineCatalogHandler(
-  ({ type, id, extra }) => {
+  async ({ type, id }) => {
 
-    const search =
-      extra?.search
-        ?.toLowerCase() || null;
-
-    // MOVIES
     if (
       type === "movie" &&
       id === "m3u_movies"
     ) {
 
-      let metas =
-        movies.map(movieToMeta);
+      return {
 
-      if (search) {
-
-        metas =
-          metas.filter(m =>
-            m.name
-              .toLowerCase()
-              .includes(search)
-          );
-      }
-
-      return Promise.resolve({
-        metas
-      });
+        metas:
+          movies.map(movieToMeta)
+      };
     }
 
-    // SERIES
     if (
       type === "series" &&
       id === "m3u_series"
     ) {
 
-      let metas =
-        Object.values(series)
-          .map(seriesToMeta);
+      return {
 
-      if (search) {
-
-        metas =
-          metas.filter(m =>
-            m.name
-              .toLowerCase()
-              .includes(search)
-          );
-      }
-
-      return Promise.resolve({
-        metas
-      });
+        metas:
+          Object.values(series)
+            .map(seriesToMeta)
+      };
     }
 
-    return Promise.resolve({
-      metas: []
-    });
+    return { metas: [] };
   }
 );
 
@@ -264,53 +366,108 @@ builder.defineCatalogHandler(
 // ─────────────────────────────────────────────
 
 builder.defineMetaHandler(
-  ({ type, id }) => {
+  async ({ type, id }) => {
 
-    // MOVIES
     if (type === "movie") {
 
-      const movie =
+      let movie =
         movies.find(
           m => m.id === id
         );
 
+      // fallback TMDB
       if (!movie) {
 
-        return Promise.resolve({
-          meta: null
-        });
+        const found =
+          movies.find(
+            m =>
+              normalize(m.title) ===
+              normalize(id)
+          );
+
+        if (found) {
+          movie = found;
+        }
       }
 
-      return Promise.resolve({
+      if (!movie) {
+
+        return { meta: null };
+      }
+
+      // buscar imdb automático
+      if (
+        !movie.id.startsWith("tt")
+      ) {
+
+        const imdb =
+          await searchTMDB(
+            movie.title,
+            "movie"
+          );
+
+        if (imdb) {
+
+          movie.id = imdb;
+        }
+      }
+
+      return {
 
         meta:
           movieToFullMeta(movie)
-      });
+      };
     }
 
-    // SERIES
     if (type === "series") {
 
-      const show =
+      let show =
         series[id];
 
       if (!show) {
 
-        return Promise.resolve({
-          meta: null
-        });
+        show =
+          Object.values(series)
+            .find(
+              s =>
+                normalize(s.title) ===
+                normalize(id)
+            );
       }
 
-      return Promise.resolve({
+      if (!show) {
+
+        return { meta: null };
+      }
+
+      // imdb automático
+      if (
+        !show.id.startsWith("tt")
+      ) {
+
+        const imdb =
+          await searchTMDB(
+            show.title,
+            "series"
+          );
+
+        if (imdb) {
+
+          show.id = imdb;
+        }
+      }
+
+      return {
 
         meta:
-          seriesToFullMeta(show, id)
-      });
+          seriesToFullMeta(
+            show,
+            show.id
+          )
+      };
     }
 
-    return Promise.resolve({
-      meta: null
-    });
+    return { meta: null };
   }
 );
 
@@ -319,24 +476,34 @@ builder.defineMetaHandler(
 // ─────────────────────────────────────────────
 
 builder.defineStreamHandler(
-  ({ type, id }) => {
+  async ({ type, id }) => {
 
     // MOVIES
     if (type === "movie") {
 
-      const movie =
+      let movie =
         movies.find(
           m => m.id === id
         );
 
       if (!movie) {
 
-        return Promise.resolve({
-          streams: []
-        });
+        movie =
+          movies.find(
+            m =>
+              normalize(m.title) ===
+              normalize(id)
+          );
       }
 
-      return Promise.resolve({
+      if (!movie) {
+
+        return {
+          streams: []
+        };
+      }
+
+      return {
 
         streams:
 
@@ -349,7 +516,7 @@ builder.defineStreamHandler(
 
             name: "M3U"
           }))
-      });
+      };
     }
 
     // SERIES
@@ -367,32 +534,35 @@ builder.defineStreamHandler(
       const episode =
         parseInt(parts[2], 10);
 
-      const show =
+      let show =
         series[seriesId];
 
       if (!show) {
 
-        return Promise.resolve({
+        show =
+          Object.values(series)
+            .find(
+              s =>
+                normalize(s.title) ===
+                normalize(seriesId)
+            );
+      }
+
+      if (!show) {
+
+        return {
           streams: []
-        });
+        };
       }
 
       const episodes =
-
         show.episodes.filter(
           e =>
             e.season === season &&
             e.episode === episode
         );
 
-      if (!episodes.length) {
-
-        return Promise.resolve({
-          streams: []
-        });
-      }
-
-      return Promise.resolve({
+      return {
 
         streams:
 
@@ -405,17 +575,15 @@ builder.defineStreamHandler(
 
             name: "M3U"
           }))
-      });
+      };
     }
 
-    return Promise.resolve({
+    return {
       streams: []
-    });
+    };
   }
 );
 
-// ─────────────────────────────────────────────
-// HELPERS
 // ─────────────────────────────────────────────
 
 function movieToMeta(m) {
@@ -428,10 +596,7 @@ function movieToMeta(m) {
 
     name: m.title,
 
-    poster: m.poster,
-
-    genres:
-      m.genres || []
+    poster: m.poster
   };
 }
 
@@ -442,7 +607,7 @@ function movieToFullMeta(m) {
     ...movieToMeta(m),
 
     description:
-      "Película desde lista M3U"
+      "Película M3U"
   };
 }
 
@@ -456,39 +621,11 @@ function seriesToMeta(s) {
 
     name: s.title,
 
-    poster: s.poster,
-
-    genres:
-      s.genres || []
+    poster: s.poster
   };
 }
 
 function seriesToFullMeta(s, id) {
-
-  const seasons = {};
-
-  s.episodes.forEach(ep => {
-
-    if (!seasons[ep.season]) {
-
-      seasons[ep.season] = [];
-    }
-
-    seasons[ep.season].push({
-
-      id:
-        `${id}:${ep.season}:${ep.episode}`,
-
-      title:
-        ep.title,
-
-      season:
-        ep.season,
-
-      number:
-        ep.episode
-    });
-  });
 
   return {
 
@@ -501,13 +638,24 @@ function seriesToFullMeta(s, id) {
     poster: s.poster,
 
     videos:
-      Object.values(seasons)
-        .flat()
+
+      s.episodes.map(ep => ({
+
+        id:
+          `${id}:${ep.season}:${ep.episode}`,
+
+        title:
+          ep.title,
+
+        season:
+          ep.season,
+
+        number:
+          ep.episode
+      }))
   };
 }
 
-// ─────────────────────────────────────────────
-// START
 // ─────────────────────────────────────────────
 
 (async () => {
@@ -520,10 +668,6 @@ function seriesToFullMeta(s, id) {
   );
 
   console.log(
-    `🚀 Addon corriendo en puerto ${PORT}`
-  );
-
-  console.log(
-    `📡 Manifest: /manifest.json`
+    `🚀 Addon corriendo en ${PORT}`
   );
 })();
