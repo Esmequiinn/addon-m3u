@@ -1,6 +1,6 @@
 /**
  * parse-m3u.js
- * Multi-stream + idiomas + calidad
+ * Multi-stream + idiomas
  */
 
 const SERIES_KEYWORDS = [
@@ -16,6 +16,8 @@ const SEASON_EP_RE =
   /[Ss](\d{1,2})[Ee](\d{1,2})/;
 
 // ─────────────────────────────────────────────
+// SLUG
+// ─────────────────────────────────────────────
 
 function slugify(str) {
 
@@ -26,6 +28,8 @@ function slugify(str) {
     .slice(0, 60);
 }
 
+// ─────────────────────────────────────────────
+// PARSE M3U
 // ─────────────────────────────────────────────
 
 function parseM3U(raw) {
@@ -63,6 +67,8 @@ function parseM3U(raw) {
   return items;
 }
 
+// ─────────────────────────────────────────────
+// PARSE EXTINF
 // ─────────────────────────────────────────────
 
 function parseExtInf(line) {
@@ -104,6 +110,8 @@ function parseExtInf(line) {
 }
 
 // ─────────────────────────────────────────────
+// EXTRAER ATRIBUTOS
+// ─────────────────────────────────────────────
 
 function extractAttr(str, attr) {
 
@@ -118,6 +126,8 @@ function extractAttr(str, attr) {
     : null;
 }
 
+// ─────────────────────────────────────────────
+// DETECTAR IDIOMA
 // ─────────────────────────────────────────────
 
 function detectLanguage(str = "") {
@@ -140,34 +150,18 @@ function detectLanguage(str = "") {
     return "🇺🇸 Inglés";
   }
 
+  if (
+    t.includes("sub") ||
+    t.includes("subtitulado")
+  ) {
+    return "💬 Subtitulado";
+  }
+
   return "🌐 Multi";
 }
 
 // ─────────────────────────────────────────────
-
-function detectQuality(str = "") {
-
-  const t =
-    str.toLowerCase();
-
-  if (
-    t.includes("2160") ||
-    t.includes("4k")
-  ) {
-    return "📺 4K";
-  }
-
-  if (t.includes("1080")) {
-    return "📺 1080p";
-  }
-
-  if (t.includes("720")) {
-    return "📺 720p";
-  }
-
-  return "📺 HD";
-}
-
+// GROUP CONTENT
 // ─────────────────────────────────────────────
 
 function groupContent(items) {
@@ -239,18 +233,23 @@ function groupContent(items) {
       series[seriesId].episodes.push({
 
         season,
+
         episode,
 
         title:
           `S${pad(season)}E${pad(episode)}`,
 
-        url: item.url,
+        streams: [
 
-        language:
-          detectLanguage(item.title),
+          {
+            url: item.url,
 
-        quality:
-          detectQuality(item.title)
+            language:
+              detectLanguage(
+                item.title
+              )
+          }
+        ]
       });
 
     } else {
@@ -296,12 +295,24 @@ function groupContent(items) {
           url: item.url,
 
           language:
-            detectLanguage(item.title),
-
-          quality:
-            detectQuality(item.title)
+            detectLanguage(
+              item.title
+            )
         });
     }
+  }
+
+  // ordenar episodios
+  for (const s of Object.values(series)) {
+
+    s.episodes.sort((a, b) =>
+
+      a.season !== b.season
+
+        ? a.season - b.season
+
+        : a.episode - b.episode
+    );
   }
 
   return {
@@ -313,6 +324,8 @@ function groupContent(items) {
   };
 }
 
+// ─────────────────────────────────────────────
+// HELPERS
 // ─────────────────────────────────────────────
 
 function pad(n) {
