@@ -723,14 +723,13 @@ Con este sistema:
 ✅ streams dentro de películas oficiales de Stremio
 
 ---
-
-## Hacer tu propio addon con Fork
+# Hacer tu propio addon con Fork
 
 Si quieres usar este proyecto como base para crear tu propio addon personal, puedes hacerlo fácilmente con Fork en GitHub. 
 
 ---
 
-¿Qué es un Fork?
+# ¿Qué es un Fork?
 
 Un Fork es una copia completa del repositorio en tu propia cuenta de GitHub. Obtienes todo el código listo para usar, y puedes modificarlo como quieras sin afectar el original.
 
