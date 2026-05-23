@@ -1,6 +1,6 @@
 /**
  * parse-m3u.js
- * Compatible con IMDb IDs reales para integración global con Stremio
+ * Multi-stream + idiomas + calidad
  */
 
 const SERIES_KEYWORDS = [
@@ -16,8 +16,6 @@ const SEASON_EP_RE =
   /[Ss](\d{1,2})[Ee](\d{1,2})/;
 
 // ─────────────────────────────────────────────
-// SLUG
-// ─────────────────────────────────────────────
 
 function slugify(str) {
 
@@ -28,8 +26,6 @@ function slugify(str) {
     .slice(0, 60);
 }
 
-// ─────────────────────────────────────────────
-// PARSE M3U
 // ─────────────────────────────────────────────
 
 function parseM3U(raw) {
@@ -68,8 +64,6 @@ function parseM3U(raw) {
 }
 
 // ─────────────────────────────────────────────
-// PARSE EXTINF
-// ─────────────────────────────────────────────
 
 function parseExtInf(line) {
 
@@ -101,21 +95,14 @@ function parseExtInf(line) {
   return {
 
     title,
-
     logo,
-
     group,
-
     tvgName,
-
     tvgId,
-
     url: null
   };
 }
 
-// ─────────────────────────────────────────────
-// EXTRAER ATRIBUTOS
 // ─────────────────────────────────────────────
 
 function extractAttr(str, attr) {
@@ -132,12 +119,60 @@ function extractAttr(str, attr) {
 }
 
 // ─────────────────────────────────────────────
-// GROUP CONTENT
+
+function detectLanguage(str = "") {
+
+  const t =
+    str.toLowerCase();
+
+  if (t.includes("latino")) {
+    return "🌎 Latino";
+  }
+
+  if (t.includes("castellano")) {
+    return "🇪🇸 Castellano";
+  }
+
+  if (
+    t.includes("english") ||
+    t.includes("ingles")
+  ) {
+    return "🇺🇸 Inglés";
+  }
+
+  return "🌐 Multi";
+}
+
+// ─────────────────────────────────────────────
+
+function detectQuality(str = "") {
+
+  const t =
+    str.toLowerCase();
+
+  if (
+    t.includes("2160") ||
+    t.includes("4k")
+  ) {
+    return "📺 4K";
+  }
+
+  if (t.includes("1080")) {
+    return "📺 1080p";
+  }
+
+  if (t.includes("720")) {
+    return "📺 720p";
+  }
+
+  return "📺 HD";
+}
+
 // ─────────────────────────────────────────────
 
 function groupContent(items) {
 
-  const movies = [];
+  const moviesMap = {};
 
   const series = {};
 
@@ -174,16 +209,13 @@ function groupContent(items) {
           .replace(/[-–_.\s]+$/, "")
           .trim();
 
-      // usar IMDb ID real si existe
       const seriesId =
         item.tvgId &&
         item.tvgId.startsWith("tt")
 
           ? item.tvgId
 
-          : slugify(rawName) ||
-            slugify(item.group) ||
-            "serie_desconocida";
+          : slugify(rawName);
 
       if (!series[seriesId]) {
 
@@ -191,7 +223,7 @@ function groupContent(items) {
 
           id: seriesId,
 
-          title: rawName || item.group,
+          title: rawName,
 
           poster: item.logo || null,
 
@@ -207,13 +239,18 @@ function groupContent(items) {
       series[seriesId].episodes.push({
 
         season,
-
         episode,
 
         title:
           `S${pad(season)}E${pad(episode)}`,
 
-        url: item.url
+        url: item.url,
+
+        language:
+          detectLanguage(item.title),
+
+        quality:
+          detectQuality(item.title)
       });
 
     } else {
@@ -222,7 +259,6 @@ function groupContent(items) {
       // MOVIES
       // ───────────────────────────────────────
 
-      // usar IMDb ID real si existe
       const movieId =
 
         item.tvgId &&
@@ -230,72 +266,58 @@ function groupContent(items) {
 
           ? item.tvgId
 
-          : slugify(item.tvgName || item.title) +
-            "_" +
-            Math.abs(hashCode(item.url));
+          : slugify(item.tvgName || item.title);
 
-      movies.push({
+      if (!moviesMap[movieId]) {
 
-        id: movieId,
+        moviesMap[movieId] = {
 
-        title:
-          item.tvgName || item.title,
+          id: movieId,
 
-        url: item.url,
+          title:
+            item.tvgName || item.title,
 
-        poster:
-          item.logo || null,
+          poster:
+            item.logo || null,
 
-        genres:
-          item.group
-            ? [item.group]
-            : []
-      });
+          genres:
+            item.group
+              ? [item.group]
+              : [],
+
+          streams: []
+        };
+      }
+
+      moviesMap[movieId]
+        .streams
+        .push({
+
+          url: item.url,
+
+          language:
+            detectLanguage(item.title),
+
+          quality:
+            detectQuality(item.title)
+        });
     }
-  }
-
-  // ordenar episodios
-  for (const s of Object.values(series)) {
-
-    s.episodes.sort((a, b) =>
-
-      a.season !== b.season
-
-        ? a.season - b.season
-
-        : a.episode - b.episode
-    );
   }
 
   return {
 
-    movies,
+    movies:
+      Object.values(moviesMap),
 
     series
   };
 }
 
 // ─────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────
 
 function pad(n) {
 
   return String(n).padStart(2, "0");
-}
-
-function hashCode(str) {
-
-  let hash = 0;
-
-  for (let i = 0; i < str.length; i++) {
-
-    hash =
-      (Math.imul(31, hash) +
-        str.charCodeAt(i)) | 0;
-  }
-
-  return hash;
 }
 
 module.exports = {
