@@ -186,9 +186,9 @@ async function loadList() {
 // ─────────────────────────────────────────────
 const manifest = {
   id: "com.esmequinn.m3u",
-  version: "5.0.0",
+  version: "1.0.0",
   name: "M3U IPTV",
-  description: "Tu lista M3U con búsqueda y resolución automática de IDs IMDb",
+  description: "Tu lista M3U con búsqueda automática de IDs IMDb",
   logo: LOGO,
   resources: ["catalog", "stream", "meta"],
   types: ["movie", "series"],
