@@ -13,19 +13,38 @@ const {
 } = require("./parse-m3u");
 
 // ─────────────────────────────
+// CONFIG
+// ─────────────────────────────
 
 const PORT =
   process.env.PORT || 7000;
 
-const M3U_URL =
-  process.env.M3U_URL;
+const M3U_URLS =
+  process.env.M3U_URLS
+    ?.split(",")
+    .map(u => u.trim())
+    .filter(Boolean) || [];
 
 const TMDB_KEY =
   process.env.TMDB_KEY;
 
 // ─────────────────────────────
 
+if (!M3U_URLS.length) {
+
+  console.error(
+    "❌ No hay M3U_URLS"
+  );
+
+  process.exit(1);
+}
+
+// ─────────────────────────────
+// STORAGE
+// ─────────────────────────────
+
 let movies = [];
+
 let series = {};
 
 let cache = {};
@@ -42,26 +61,80 @@ if (fs.existsSync("cache.json")) {
 }
 
 // ─────────────────────────────
-// LOAD LIST
+// LOAD ALL LISTS
 // ─────────────────────────────
 
-async function loadList() {
+async function loadList(url) {
+
+  try {
+
+    console.log(
+      `📥 Descargando:\n${url}`
+    );
+
+    const res =
+      await fetch(url);
+
+    if (!res.ok) {
+
+      throw new Error(
+        `HTTP ${res.status}`
+      );
+    }
+
+    const raw =
+      await res.text();
+
+    console.log(
+      `📦 Tamaño: ${raw.length}`
+    );
+
+    const items =
+      parseM3U(raw);
+
+    console.log(
+      `📺 Items: ${items.length}`
+    );
+
+    return items;
+
+  } catch (err) {
+
+    console.error(
+      `❌ Error lista:\n${url}`
+    );
+
+    console.error(
+      err.message
+    );
+
+    return [];
+  }
+}
+
+// ─────────────────────────────
+// LOAD EVERYTHING
+// ─────────────────────────────
+
+async function loadAllLists() {
+
+  let allItems = [];
+
+  for (const url of M3U_URLS) {
+
+    const items =
+      await loadList(url);
+
+    allItems =
+      allItems.concat(items);
+  }
 
   console.log(
-    "📥 Descargando lista..."
+    `📦 TOTAL ITEMS: ${allItems.length}`
   );
 
-  const res =
-    await fetch(M3U_URL);
-
-  const raw =
-    await res.text();
-
-  const items =
-    parseM3U(raw);
-
   const grouped =
-    groupContent(items);
+    groupContent(allItems);
 
   movies =
     grouped.movies;
@@ -71,6 +144,10 @@ async function loadList() {
 
   console.log(
     `✅ ${movies.length} películas`
+  );
+
+  console.log(
+    `✅ ${Object.keys(series).length} series`
   );
 }
 
@@ -82,6 +159,10 @@ async function searchTMDB(
   title,
   type = "movie"
 ) {
+
+  if (!TMDB_KEY) {
+    return null;
+  }
 
   const slug =
     slugify(title);
@@ -118,13 +199,13 @@ async function searchTMDB(
     const first =
       data.results[0];
 
-    const external =
+    const extRes =
       await fetch(
         `https://api.themoviedb.org/3/${endpoint}/${first.id}/external_ids?api_key=${TMDB_KEY}`
       );
 
     const ext =
-      await external.json();
+      await extRes.json();
 
     if (!ext.imdb_id) {
 
@@ -136,6 +217,7 @@ async function searchTMDB(
 
     fs.writeFileSync(
       "cache.json",
+
       JSON.stringify(
         cache,
         null,
@@ -163,12 +245,15 @@ const manifest = {
 
   id: "com.m3u.global",
 
-  version: "1.0.0",
+  version: "2.0.0",
 
   name: "Mi Lista M3U",
 
   description:
-    "M3U Global",
+    "M3U Multi Lista",
+
+  logo:
+    "https://i.imgur.com/qKMZMBx.png",
 
   resources: [
     "catalog",
@@ -185,13 +270,17 @@ const manifest = {
 
     {
       type: "movie",
+
       id: "m3u_movies",
+
       name: "Mis Películas"
     },
 
     {
       type: "series",
+
       id: "m3u_series",
+
       name: "Mis Series"
     }
   ]
@@ -208,7 +297,8 @@ builder.defineCatalogHandler(
   ({ type, id }) => {
 
     if (
-      type === "movie"
+      type === "movie" &&
+      id === "m3u_movies"
     ) {
 
       return Promise.resolve({
@@ -229,7 +319,8 @@ builder.defineCatalogHandler(
     }
 
     if (
-      type === "series"
+      type === "series" &&
+      id === "m3u_series"
     ) {
 
       return Promise.resolve({
@@ -268,8 +359,7 @@ builder.defineStreamHandler(
 
       const movie =
         movies.find(
-          m =>
-            m.id === id
+          m => m.id === id
         );
 
       if (!movie) {
@@ -298,11 +388,17 @@ builder.defineStreamHandler(
     // SERIES
     if (type === "series") {
 
-      const [
-        seriesId,
-        season,
-        episode
-      ] = id.split(":");
+      const parts =
+        id.split(":");
+
+      const seriesId =
+        parts[0];
+
+      const season =
+        parseInt(parts[1]);
+
+      const episode =
+        parseInt(parts[2]);
 
       const show =
         series[seriesId];
@@ -314,22 +410,20 @@ builder.defineStreamHandler(
         };
       }
 
-      const eps =
+      const episodes =
         show.episodes.filter(
           e =>
 
-            e.season ==
-              season &&
+            e.season === season &&
 
-            e.episode ==
-              episode
+            e.episode === episode
         );
 
       return {
 
         streams:
 
-          eps.map(ep => ({
+          episodes.map(ep => ({
 
             url: ep.url,
 
@@ -348,10 +442,102 @@ builder.defineStreamHandler(
 );
 
 // ─────────────────────────────
+// META
+// ─────────────────────────────
+
+builder.defineMetaHandler(
+  ({ type, id }) => {
+
+    if (type === "movie") {
+
+      const movie =
+        movies.find(
+          m => m.id === id
+        );
+
+      if (!movie) {
+
+        return Promise.resolve({
+          meta: null
+        });
+      }
+
+      return Promise.resolve({
+
+        meta: {
+
+          id: movie.id,
+
+          type: "movie",
+
+          name: movie.title,
+
+          poster:
+            movie.poster
+        }
+      });
+    }
+
+    if (type === "series") {
+
+      const show =
+        series[id];
+
+      if (!show) {
+
+        return Promise.resolve({
+          meta: null
+        });
+      }
+
+      const videos =
+        show.episodes.map(ep => ({
+
+          id:
+            `${id}:${ep.season}:${ep.episode}`,
+
+          title:
+            `S${String(ep.season).padStart(2, "0")}E${String(ep.episode).padStart(2, "0")}`,
+
+          season:
+            ep.season,
+
+          episode:
+            ep.episode
+        }));
+
+      return Promise.resolve({
+
+        meta: {
+
+          id,
+
+          type: "series",
+
+          name:
+            show.title,
+
+          poster:
+            show.poster,
+
+          videos
+        }
+      });
+    }
+
+    return Promise.resolve({
+      meta: null
+    });
+  }
+);
+
+// ─────────────────────────────
+// START
+// ─────────────────────────────
 
 (async () => {
 
-  await loadList();
+  await loadAllLists();
 
   serveHTTP(
     builder.getInterface(),
@@ -359,6 +545,6 @@ builder.defineStreamHandler(
   );
 
   console.log(
-    `🚀 Puerto ${PORT}`
+    `🚀 Addon puerto ${PORT}`
   );
 })();
