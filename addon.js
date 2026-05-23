@@ -1,7 +1,6 @@
 const { addonBuilder, serveHTTP } =
   require("stremio-addon-sdk");
 
-
 const {
   parseM3U,
   groupContent
@@ -59,10 +58,6 @@ async function loadList() {
         `HTTP ${response.status}`
       );
     }
-
-    console.log(
-      "↪ Redirect detectado"
-    );
 
     const raw =
       await response.text();
@@ -189,6 +184,7 @@ builder.defineCatalogHandler(
       extra?.search
         ?.toLowerCase() || null;
 
+    // MOVIES
     if (
       type === "movie" &&
       id === "m3u_movies"
@@ -212,6 +208,7 @@ builder.defineCatalogHandler(
       });
     }
 
+    // SERIES
     if (
       type === "series" &&
       id === "m3u_series"
@@ -249,6 +246,7 @@ builder.defineCatalogHandler(
 builder.defineMetaHandler(
   ({ type, id }) => {
 
+    // MOVIES
     if (type === "movie") {
 
       const movie =
@@ -270,6 +268,7 @@ builder.defineMetaHandler(
       });
     }
 
+    // SERIES
     if (type === "series") {
 
       const show =
@@ -302,7 +301,10 @@ builder.defineMetaHandler(
 builder.defineStreamHandler(
   ({ type, id }) => {
 
+    // ─────────────────────────────────────────
     // MOVIES
+    // ─────────────────────────────────────────
+
     if (type === "movie") {
 
       const movie =
@@ -319,23 +321,24 @@ builder.defineStreamHandler(
 
       return Promise.resolve({
 
-        streams: [
+        streams:
 
-          {
-            url: movie.url,
+          movie.streams.map(s => ({
+
+            url: s.url,
 
             title:
-              detectLanguage(
-                movie.title
-              ),
+              `${s.language}\n${s.quality}`,
 
             name: "M3U"
-          }
-        ]
+          }))
       });
     }
 
+    // ─────────────────────────────────────────
     // SERIES
+    // ─────────────────────────────────────────
+
     if (type === "series") {
 
       const parts =
@@ -360,14 +363,15 @@ builder.defineStreamHandler(
         });
       }
 
-      const ep =
-        show.episodes.find(
+      const episodes =
+
+        show.episodes.filter(
           e =>
             e.season === season &&
             e.episode === episode
         );
 
-      if (!ep) {
+      if (!episodes.length) {
 
         return Promise.resolve({
           streams: []
@@ -376,19 +380,17 @@ builder.defineStreamHandler(
 
       return Promise.resolve({
 
-        streams: [
+        streams:
 
-          {
+          episodes.map(ep => ({
+
             url: ep.url,
 
             title:
-              detectLanguage(
-                ep.title
-              ),
+              `${ep.language}\n${ep.quality}`,
 
             name: "M3U"
-          }
-        ]
+          }))
       });
     }
 
@@ -401,39 +403,6 @@ builder.defineStreamHandler(
 // ─────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────
-
-function detectLanguage(title) {
-
-  const t =
-    title.toLowerCase();
-
-  const langs = [];
-
-  if (t.includes("latino")) {
-    langs.push("Latino");
-  }
-
-  if (t.includes("castellano")) {
-    langs.push("Castellano");
-  }
-
-  if (
-    t.includes("english") ||
-    t.includes("ingles")
-  ) {
-    langs.push("Inglés");
-  }
-
-  if (t.includes("sub")) {
-    langs.push("Sub");
-  }
-
-  if (langs.length === 0) {
-    return "M3U";
-  }
-
-  return langs.join(" • ");
-}
 
 function movieToMeta(m) {
 
