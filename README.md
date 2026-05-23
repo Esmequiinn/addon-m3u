@@ -730,7 +730,8 @@ Si quieres usar este proyecto como base para crear tu propio addon personal, pue
 
 ---
 
-# ¿Qué es un Fork?
+¿Qué es un Fork?
+
 Un Fork es una copia completa del repositorio en tu propia cuenta de GitHub. Obtienes todo el código listo para usar, y puedes modificarlo como quieras sin afectar el original.
 
 ---
