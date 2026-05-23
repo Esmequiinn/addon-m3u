@@ -154,9 +154,9 @@ Ejemplo:
 ```env
 TMDB_API_KEY=123abc456def789
 ```
-```txt
+
 ⚠️ La variable debe llamarse exactamente TMDB_API_KEY con guiones bajos. Un nombre diferente como TMDB-KEY hace que el addon no encuentre la clave y nunca resuelva los IDs.
-```
+
 ---
 
 # ⚠ Importante
