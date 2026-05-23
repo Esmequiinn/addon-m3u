@@ -9,7 +9,7 @@ Addon personal para reproducir películas y series desde una lista M3U remota di
 - Cuenta en GitHub
 - Cuenta en Render
 - Stremio instalado
-- Una lista M3U accesible mediante URL
+- Una o varias listas M3U accesibles mediante URL
 
 ---
 
@@ -17,10 +17,171 @@ Addon personal para reproducir películas y series desde una lista M3U remota di
 
 El addon:
 
-1. Descarga automáticamente tu lista M3U desde una URL remota
-2. Detecta películas y series
-3. Crea catálogos personalizados en Stremio
-4. Reproduce los streams directamente desde tu M3U
+- Descarga automáticamente una o varias listas M3U remotas
+- Detecta películas y series
+- Agrupa episodios automáticamente
+- Detecta múltiples streams por película/capítulo
+- Detecta idiomas automáticamente
+- Crea catálogos personalizados en Stremio
+- Reproduce streams directamente desde IPTV/M3U
+- Soporta integración global con IMDb IDs reales
+- Incluye fallback automático por nombre
+
+---
+
+Si una película tiene varios streams:
+
+- Latino
+- Castellano
+- Inglés
+
+Stremio mostrará varios resultados automáticamente.
+
+Ejemplo:
+
+M3U  
+🌎 Latino
+
+M3U  
+🇪🇸 Castellano
+
+M3U  
+🇺🇸 Inglés
+
+---
+
+## ✅ Integración global con Stremio
+
+El addon soporta:
+
+- IMDb IDs reales (`tt1234567`)
+- Matching automático con Cinemeta
+- Streams dentro de películas oficiales de Stremio
+
+---
+
+## ✅ Fallback automático por nombre
+
+Ahora el addon puede funcionar incluso si una lista NO tiene IMDb IDs.
+
+Cuando Stremio pide:
+
+```txt
+tt0816692
+```
+
+(el IMDb de Interstellar)
+
+el addon:
+
+1. intenta encontrar ese IMDb en tu lista
+2. si no existe:
+   - busca automáticamente por nombre
+   - compara títulos
+   - devuelve streams compatibles
+
+Gracias a esto:
+
+✅ funcionan listas sin IMDb  
+✅ funcionan listas nuevas  
+✅ puedes mezclar listas  
+✅ ya no dependes completamente de `clean-m3u.js`
+
+---
+
+## ✅ Cache automático
+
+El addon guarda coincidencias automáticamente.
+
+Ejemplo:
+
+```json
+{
+  "interstellar": "tt0816692",
+  "avatar": "tt0499549"
+}
+```
+
+Así:
+
+- la primera búsqueda consulta metadata
+- luego queda guardado
+- no vuelve a consultar APIs
+
+
+# 🔑 Configurar TMDB API para búsqueda automática
+
+El addon soporta búsqueda automática de películas y series usando TMDB.
+
+---
+
+# Crear API Key de TMDB
+
+1. Crear cuenta en:
+
+```txt
+https://www.themoviedb.org/
+```
+
+2. Ir a:
+
+```txt
+https://www.themoviedb.org/settings/api
+```
+
+3. Crear una API Key
+
+4. Copiar tu API Key
+
+---
+
+# 🔑 Agregar la API Key en Render
+
+Ir a:
+
+```txt
+Render → Web Service → Environment
+```
+
+Agregar:
+
+```env
+TMDB_API_KEY=TU_API_KEY
+```
+
+Ejemplo:
+
+```env
+TMDB_API_KEY=123abc456def789
+```
+
+---
+
+
+# Gracias a esto puedes usar:
+
+- listas sin IMDb IDs
+- listas IPTV normales
+- múltiples listas M3U
+- listas nuevas sin reprocesar
+
+sin necesidad de ejecutar `clean-m3u.js` cada vez.
+
+---
+
+# ⚠ Importante
+
+TMDB tiene límites de requests por minuto.
+
+Por eso el addon:
+
+- usa cache automático
+- guarda coincidencias
+- evita consultas repetidas
+- solo busca cuando es necesario
+
+Esto hace que el sistema sea mucho más rápido y estable.
+
 
 ---
 
@@ -32,14 +193,15 @@ El proyecto debe contener:
 addon.js
 parse-m3u.js
 package.json
+cache.json
 README.md
 ```
 
 ---
 
-# 🌐 Lista M3U remota
+# 🌐 Listas M3U remotas
 
-Tu lista M3U debe estar disponible mediante una URL pública.
+Las listas deben estar disponibles mediante URL pública/directa.
 
 Ejemplo:
 
@@ -47,51 +209,78 @@ Ejemplo:
 https://github.com/usuario/repo/releases/download/iptv/lista.m3u
 ```
 
+También puedes usar varias listas.
+
+---
+
+# Varias listas M3U
+
+Puedes agregar múltiples listas IPTV en Render.
+
+Ejemplo:
+
+```env
+M3U_URLS=https://lista1.m3u,https://lista2.m3u,https://lista3.m3u
+```
+
+El addon:
+
+- descargará todas
+- las combinará automáticamente
+- agrupará películas y series
+- mostrará todos los streams disponibles
+
 ---
 
 # 🚀 Deploy en Render
 
 ## 1. Subir el proyecto a GitHub
 
-Sube estos archivos a tu repositorio:
+Sube:
 
-- `addon.js`
-- `parse-m3u.js`
-- `package.json`
-- `README.md`
+```txt
+addon.js
+parse-m3u.js
+package.json
+cache.json
+README.md
+```
 
 NO subas:
 
-- `node_modules`
-- archivos locales `.m3u`
-- ngrok
+```txt
+node_modules
+archivos locales .m3u
+```
 
 ---
 
 ## 2. Crear Web Service en Render
 
-Ve a:
+Ir a:
 
-- https://render.com
+```txt
+https://render.com
+```
 
 Luego:
 
-1. Presiona **New +**
-2. Selecciona **Web Service**
-3. Conecta tu repositorio GitHub
-4. Selecciona el repositorio del addon
+- New +
+- Web Service
+- Conectar GitHub
+- Seleccionar el repositorio
 
 ---
 
-## 3. Configuración Render
+# ⚙ Configuración Render
 
-### Build Command
+## Build Command
 
 ```bash
 npm install
 ```
 
-### Start Command
+## Start Command
 
 ```bash
 npm start
@@ -99,25 +288,33 @@ npm start
 
 ---
 
-## 4. Variables de entorno
+## # 🔑 Variables de entorno
 
-En Render agrega esta variable:
+## Una sola lista
 
 | KEY | VALUE |
 |---|---|
 | `M3U_URL` | `https://url/de/tu-lista/iptv/o-m3u/iptv/lista.m3u` |
+```
+
+## Varias listas
+
+| KEY | VALUE |
+|---|---|
+| `M3U_URLS` | `https://url/de/tu-lista/iptv/o-m3u/iptv/lista.m3u` |
+```
 
 ---
 
 # ▶ Instalar el addon en Stremio
 
-Cuando Render termine el deploy, te dará una URL parecida a:
+Cuando Render termine el deploy:
 
 ```txt
 https://tu-addon.onrender.com
 ```
 
-Tu manifest será:
+Manifest:
 
 ```txt
 https://tu-addon.onrender.com/manifest.json
@@ -125,18 +322,18 @@ https://tu-addon.onrender.com/manifest.json
 
 ---
 
-## Instalar en Stremio
+## 📥 Instalar en Stremio
 
-1. Abre Stremio
-2. Ve a **Addons**
-3. Selecciona **Install from URL**
-4. Pega:
+1. Abrir Stremio
+2. Ir a Addons
+3. Install from URL
+4. Pegar:
 
 ```txt
 https://tu-addon.onrender.com/manifest.json
 ```
 
-5. Presiona **Install**
+5. Presionar Install
 
 ---
 
@@ -162,7 +359,7 @@ http://servidor.com/movie.m3u8
 
 ## Series
 
-Las series deben contener formato:
+Las series deben contener:
 
 ```txt
 S01E01
@@ -177,39 +374,45 @@ http://servidor.com/episode1.m3u8
 
 ---
 
-# ⚠ Importante
+# 🌎 Detección automática de idioma
 
-Actualmente el addon funciona como catálogo privado.
+El addon detecta automáticamente:
 
-Eso significa que:
+- Latino
+- Castellano
+- Inglés
+- Multi Audio
 
-✅ Verás:
-- Mis Películas
-- Mis Series
+Basándose en el nombre del stream.
 
-❌ Pero NO aparecerá:
-- en búsquedas globales de Stremio
-- en películas oficiales del inicio
-- en Cinemeta
+Ejemplo:
 
-Para eso sería necesario integrar IDs IMDb/TMDB.
+```txt
+Breaking Bad Latino
+Avatar Castellano
+Movie English
+```
 
 ---
 
-# 🎯 Integración Global con Stremio (IMDb IDs)
+# 🎯 Integración global con IMDb IDs
 
-Este addon soporta integración global con Stremio usando IDs reales de IMDb (`tt1234567`).
+El addon soporta:
+
+```txt
+tvg-id="tt1234567"
+```
 
 Gracias a esto:
 
-* las películas aparecerán al buscarlas normalmente en Stremio
-* los streams aparecerán dentro de películas/series oficiales
-* mejora el matching automático
-* funciona mejor con Cinemeta y otros addons
+✅ aparecen streams en resultados oficiales  
+✅ funciona con Cinemeta  
+✅ mejor matching automático  
+✅ integración global con Stremio
 
 ---
 
-# 📥 Agregar IMDb IDs automáticamente a tu lista M3U
+# 🛠 Procesamiento manual con clean-m3u.js agregar IMDb IDs automáticamente a tu lista M3U local (Opcional)
 
 El proyecto incluye:
 
@@ -227,6 +430,202 @@ Este script:
 * guarda progreso automáticamente
 * permite continuar después sin perder avance
 
+
+# 🌐 Usar tu lista M3U procesada en Render
+
+Después de agregar los IMDb IDs a tu lista local usando `clean-m3u.js`, necesitarás subir el archivo `.m3u` a un servicio que permita acceso mediante enlace directo.
+
+El addon descargará automáticamente la lista desde esa URL cada vez que Render inicie.
+
+---
+
+# ✅ Servicios recomendados
+
+Puedes alojar tu lista M3U en:
+
+- GitHub Releases
+- Dropbox
+- Google Drive
+- Servidor VPS
+- Hosting web
+- CDN
+- Servidores IPTV propios
+
+---
+
+# 🔗 Importante: la URL debe ser DIRECTA
+
+El addon necesita una URL que descargue el archivo directamente.
+
+Ejemplo correcto:
+
+```txt
+https://servidor.com/lista.m3u
+
+Ejemplo incorrecto:
+
+https://drive.google.com/file/d/xxxxx/view
+
+Porque esa URL abre una página web y NO el archivo directamente.
+
+# 📦 GitHub Releases (Recomendado)
+
+La forma más estable y sencilla de alojar tu lista M3U es usando GitHub Releases.
+
+## Pasos
+
+1. Subir tu archivo:
+
+```txt
+lista-progress.m3u
+```
+
+a tu repositorio.
+
+2. Ir a:
+
+```txt
+Releases → Create Release
+```
+
+3. Adjuntar el archivo `.m3u`
+
+4. Publicar la release
+
+5. Copiar el enlace directo del archivo
+
+Ejemplo:
+
+```txt
+https://github.com/usuario/repo/releases/download/iptv/lista-progress.m3u
+```
+
+---
+
+# ☁ Google Drive
+
+Google Drive también funciona, pero debes convertir el enlace compartido en un enlace directo de descarga.
+
+## Obtener enlace directo
+
+Tu enlace normal se verá así:
+
+```txt
+https://drive.google.com/file/d/FILE_ID/view
+```
+
+Debes extraer el `FILE_ID` y convertirlo a:
+
+```txt
+https://drive.google.com/uc?export=download&id=FILE_ID
+```
+
+---
+
+# ☁ Dropbox
+
+En Dropbox:
+
+1. Compartir archivo
+2. Copiar enlace
+
+El enlace normalmente termina en:
+
+```txt
+?dl=0
+```
+
+Debes cambiarlo por:
+
+```txt
+?dl=1
+```
+
+o:
+
+```txt
+?raw=1
+```
+
+para forzar descarga directa.
+
+---
+
+# 🛠 Modo desarrollador para obtener enlaces directos
+
+En algunos servicios como Google Drive o Dropbox puedes usar el modo desarrollador del navegador para verificar si realmente estás obteniendo el archivo directo.
+
+## Cómo hacerlo
+
+1. Abrir el enlace
+2. Presionar:
+
+```txt
+F12
+```
+
+o:
+
+```txt
+Ctrl + Shift + I
+```
+
+3. Ir a:
+
+```txt
+Network
+```
+
+4. Recargar la página
+
+5. Buscar:
+
+```txt
+.m3u
+download
+usercontent
+uc?export=download
+```
+
+Ahí podrás encontrar la URL real/directa del archivo.
+
+---
+
+# 🔑 Configurar Render
+
+Después de obtener tu URL directa, debes agregarla en Render.
+
+Ir a:
+
+```txt
+Render → Web Service → Environment
+```
+
+Agregar:
+
+```env
+M3U_URL=https://tu-link-directo.m3u
+```
+
+o múltiples listas:
+
+```env
+M3U_URLS=https://lista1.m3u,https://lista2.m3u
+```
+
+---
+
+# 🚀 Resultado final
+
+Cuando Render inicie:
+
+- descargará automáticamente la lista
+- parseará películas y series
+- detectará streams
+- agrupará episodios
+- cargará IMDb IDs
+- integrará los streams directamente en Stremio
+
 ---
 
 # 🔑 Crear API Key de TMDB
@@ -237,7 +636,7 @@ Este script:
 
 2. Luego entra a:
 
-[TMDB API Settings](https://www.themoviedb.org/settings/api?utm_source=chatgpt.com)
+[TMDB API Settings](https://www.themoviedb.org/settings/api)
 
 3. Copia tu API Key.
 
@@ -350,25 +749,17 @@ Después de terminar:
 lista-progress.m3u
 ```
 
-a GitHub Releases o servidor directo.
+a:
 
-2. Usa el link RAW/directo en Render:
+- GitHub Releases
+- servidor directo
+- hosting M3U
+
+2. Usa el link directo en Render:
 
 ```env id="lci4me"
 M3U_URL=https://tu-link-directo.m3u
 ```
-
----
-
-# 🔥 Resultado final
-
-Con IMDb IDs reales:
-
-* Stremio detecta películas/series automáticamente
-* los streams aparecen dentro de resultados oficiales
-* integración global funcional
-* mejor compatibilidad con addons y metadata oficiales.
-
 
 ---
 
@@ -392,11 +783,12 @@ Para reiniciar:
 
 | Problema | Solución |
 |---|---|
-| No aparecen películas | Verifica que la URL M3U funciona |
-| Error cargando M3U | GitHub puede estar redireccionando |
-| No reproduce streams | Verifica que los enlaces IPTV funcionan |
-| Las series no se agrupan | El nombre debe contener `S01E01` |
-| Render tarda en abrir | El plan gratuito entra en modo sleep |
+| No aparecen películas | Verifica la URL M3U |
+| Error cargando M3U | Verifica redirecciones |
+| No reproduce streams | Verifica IPTV |
+| Las series no se agrupan | Deben contener S01E01 |
+| Render tarda en abrir | El plan gratuito duerme |
+| Streams duplicados | Varias listas contienen el mismo stream |
 
 ---
 
@@ -405,3 +797,17 @@ Para reiniciar:
 El plan gratuito de Render puede dormir el servidor después de inactividad.
 
 El primer stream o apertura puede tardar algunos segundos.
+
+# 🔥 Resultado final
+
+Con este sistema:
+
+✅ múltiples listas M3U  
+✅ múltiples streams  
+✅ detección automática de idiomas  
+✅ integración global con Stremio  
+✅ soporte IMDb  
+✅ fallback automático  
+✅ compatibilidad con Cinemeta  
+✅ cache automático  
+✅ streams dentro de películas oficiales de Stremio
