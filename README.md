@@ -269,22 +269,20 @@ npm start
 
 ---
 
-## # 🔑 Variables de entorno
+# 🔑 Variables de entorno
 
 ## Una sola lista
-```
 
 | KEY | VALUE |
 |---|---|
 | `M3U_URL` | `https://url/de/tu-lista/iptv/o-m3u/iptv/lista.m3u` |
-```
-```
+
 ## Varias listas
 
 | KEY | VALUE |
 |---|---|
 | `M3U_URLS` | `https://url/de/tu-lista/iptv/o-m3u/iptv/lista.m3u` |
-```
+
 
 ---
 
@@ -726,14 +724,18 @@ Con este sistema:
 
 
 ## Hacer tu propio addon con Fork
+
 Si quieres usar este proyecto como base para crear tu propio addon personal, puedes hacerlo fácilmente con Fork en GitHub. 
+
 ---
 
 # ¿Qué es un Fork?
 Un Fork es una copia completa del repositorio en tu propia cuenta de GitHub. Obtienes todo el código listo para usar, y puedes modificarlo como quieras sin afectar el original.
+
 ---
-# Pasos para hacer Fork y tener tu propio addon
-# 1. Hacer Fork del repositorio
+
+Pasos para hacer Fork y tener tu propio addon
+1. Hacer Fork del repositorio
 
   Ir a:
 
@@ -747,7 +749,7 @@ https://github.com/Esmequiinn/addon-m3u
 Ahora tienes una copia exacta del proyecto en tu cuenta.
 ---
 
-# 2. Crear tu Web Service en Render
+2. Crear tu Web Service en Render
 
 Ir a https://render.com
 New + → Web Service
@@ -755,7 +757,7 @@ Conectar GitHub
 Seleccionar tu fork (no el repositorio original)
 
 
-# 3. Configurar tus propias variables de entorno
+3. Configurar tus propias variables de entorno
 En tu Web Service de Render, ir a Environment y agregar:
 
 | KEY                  | VALUE                              |
@@ -764,6 +766,6 @@ En tu Web Service de Render, ir a Environment y agregar:
 | `M3U_URLS`           | Tus propias URLs de listas M3U     |
 
 
-# 4. Instalar en Stremio
+4. Instalar en Stremio
 Cuando Render termine el deploy, copiar tu URL y pegarla en Stremio:
 ```https://tu-propio-addon.onrender.com/manifest.json ```
