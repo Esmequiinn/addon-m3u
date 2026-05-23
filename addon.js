@@ -4,10 +4,7 @@ const { parseM3U, groupContent } = require("./parse-m3u");
 // ─────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────
-const PORT = process.env.PORT || 7000;
-
-// ✅ FIX #1: Nombre correcto de la variable de entorno
-// En Render pon: TMDB_API_KEY = tu_clave
+const PORT         = process.env.PORT || 7000;
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
 const M3U_URLS = process.env.M3U_URLS
@@ -15,9 +12,7 @@ const M3U_URLS = process.env.M3U_URLS
   : [];
 
 const SINGLE_URL = process.env.M3U_URL;
-if (SINGLE_URL && !M3U_URLS.includes(SINGLE_URL)) {
-  M3U_URLS.push(SINGLE_URL);
-}
+if (SINGLE_URL && !M3U_URLS.includes(SINGLE_URL)) M3U_URLS.push(SINGLE_URL);
 
 if (!M3U_URLS.length) {
   console.error("❌ No configuraste M3U_URLS ni M3U_URL");
@@ -25,14 +20,13 @@ if (!M3U_URLS.length) {
 }
 
 if (!TMDB_API_KEY) {
-  console.warn("⚠️  TMDB_API_KEY no configurada — los IDs IMDb no se buscarán automáticamente");
+  console.warn("⚠️  TMDB_API_KEY no configurada — los IDs IMDb no se resolverán");
 }
 
 // ─────────────────────────────────────────────
-// ✅ FIX #2: Cache EN MEMORIA (no en disco)
-// Render tiene filesystem efímero — el archivo se borraba en cada reinicio
+// CACHE EN MEMORIA
 // ─────────────────────────────────────────────
-const tmdbCache = {};
+const tmdbCache = {};   // normalizedTitle → imdbId | null
 
 // ─────────────────────────────────────────────
 // STORAGE
@@ -40,13 +34,12 @@ const tmdbCache = {};
 let movies = [];
 let series = {};
 
-// Índices secundarios: imdbId → slug original
-// Para que el stream handler pueda encontrar por IMDb ID
-const movieImdbIndex = {};   // imdbId → movieId slug
-const seriesImdbIndex = {};  // imdbId → seriesId slug
+// Índices cruzados: imdbId → id-slug original
+const movieImdbIndex  = {};
+const seriesImdbIndex = {};
 
 // ─────────────────────────────────────────────
-// NORMALIZE
+// NORMALIZE (para búsquedas y comparaciones)
 // ─────────────────────────────────────────────
 function normalize(str = "") {
   return str
@@ -63,80 +56,109 @@ function normalize(str = "") {
 }
 
 // ─────────────────────────────────────────────
-// TMDB SEARCH
+// TMDB SEARCH  (una sola función, usada en todos lados)
 // ─────────────────────────────────────────────
 async function searchTMDB(title, type) {
   if (!TMDB_API_KEY) return null;
 
   const clean = normalize(title);
-  if (tmdbCache[clean]) return tmdbCache[clean];
+  if (clean in tmdbCache) return tmdbCache[clean]; // null también es válido
 
   try {
-    console.log(`🔎 TMDB buscando: ${clean}`);
     const endpoint = type === "series" ? "tv" : "movie";
-
     const searchRes = await fetch(
-      `https://api.themoviedb.org/3/search/${endpoint}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(clean)}&language=es-MX`
+      `https://api.themoviedb.org/3/search/${endpoint}` +
+      `?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(clean)}&language=es-MX`
     );
     const searchData = await searchRes.json();
 
-    if (!searchData.results || !searchData.results.length) {
+    if (!searchData.results?.length) {
       tmdbCache[clean] = null;
       return null;
     }
 
-    const first = searchData.results[0];
     const detailsRes = await fetch(
-      `https://api.themoviedb.org/3/${endpoint}/${first.id}/external_ids?api_key=${TMDB_API_KEY}`
+      `https://api.themoviedb.org/3/${endpoint}/${searchData.results[0].id}/external_ids` +
+      `?api_key=${TMDB_API_KEY}`
     );
     const details = await detailsRes.json();
+    const imdb = details.imdb_id || null;
 
-    if (!details.imdb_id) {
-      tmdbCache[clean] = null;
-      return null;
-    }
-
-    // ✅ FIX #2: Solo guardamos en memoria, no en archivo
-    tmdbCache[clean] = details.imdb_id;
-    console.log(`✅ TMDB: ${clean} → ${details.imdb_id}`);
-    return details.imdb_id;
+    tmdbCache[clean] = imdb;
+    if (imdb) console.log(`✅ TMDB: "${clean}" → ${imdb}`);
+    return imdb;
 
   } catch (err) {
-    console.error(`❌ TMDB error para "${title}":`, err.message);
+    console.error(`❌ TMDB error "${title}":`, err.message);
+    tmdbCache[clean] = null;
     return null;
   }
+}
+
+// ─────────────────────────────────────────────
+// PRE-CARGA DE IDs TMDB EN SEGUNDO PLANO
+// Procesa todos los items sin IMDb ID con throttle (300 ms entre requests)
+// para no rebasar el límite de TMDB (~40 req / 10 seg en plan gratuito)
+// ─────────────────────────────────────────────
+async function prefetchTMDBIds() {
+  if (!TMDB_API_KEY) return;
+
+  const DELAY_MS = 300; // ~3 req/seg → muy por debajo del límite
+
+  // Películas sin IMDb
+  for (const movie of movies) {
+    if (movie.id.startsWith("tt")) continue;
+    const imdb = await searchTMDB(movie.title, "movie");
+    if (imdb) {
+      movieImdbIndex[imdb] = movie.id;
+      movie.id = imdb;
+    }
+    await sleep(DELAY_MS);
+  }
+
+  console.log("✅ Pre-carga de películas completada");
+
+  // Series sin IMDb
+  for (const show of Object.values(series)) {
+    if (show.id.startsWith("tt")) continue;
+    const imdb = await searchTMDB(show.title, "series");
+    if (imdb) {
+      seriesImdbIndex[imdb] = show.id;
+      show.id = imdb;
+    }
+    await sleep(DELAY_MS);
+  }
+
+  console.log("✅ Pre-carga de series completada");
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ─────────────────────────────────────────────
 // LOAD LISTS
 // ─────────────────────────────────────────────
 async function loadList() {
-  try {
-    let allItems = [];
+  let allItems = [];
 
-    for (const url of M3U_URLS) {
-      console.log(`📥 Descargando: ${url}`);
+  for (const url of M3U_URLS) {
+    console.log(`📥 Descargando: ${url}`);
+    try {
       const response = await fetch(url);
-      if (!response.ok) {
-        console.error(`❌ HTTP ${response.status} al descargar ${url}`);
-        continue;
-      }
-      const raw = await response.text();
-      const items = parseM3U(raw);
+      if (!response.ok) { console.error(`❌ HTTP ${response.status}: ${url}`); continue; }
+      const items = parseM3U(await response.text());
       console.log(`📺 ${items.length} items en ${url}`);
       allItems.push(...items);
+    } catch (err) {
+      console.error(`❌ Error descargando ${url}:`, err.message);
     }
-
-    const grouped = groupContent(allItems);
-    movies = grouped.movies;
-    series = grouped.series;
-
-    console.log(`✅ ${movies.length} películas cargadas`);
-    console.log(`✅ ${Object.keys(series).length} series cargadas`);
-
-  } catch (err) {
-    console.error("❌ Error en loadList:", err);
   }
+
+  const grouped = groupContent(allItems);
+  movies = grouped.movies;
+  series = grouped.series;
+  console.log(`✅ ${movies.length} películas | ${Object.keys(series).length} series`);
 }
 
 // ─────────────────────────────────────────────
@@ -144,29 +166,73 @@ async function loadList() {
 // ─────────────────────────────────────────────
 const manifest = {
   id: "com.esmequinn.m3u",
-  version: "4.0.0",
+  version: "5.0.0",
   name: "M3U IPTV",
-  description: "Tu lista M3U con búsqueda automática de IDs IMDb via TMDB",
+  description: "Tu lista M3U con búsqueda y resolución automática de IDs IMDb",
   resources: ["catalog", "stream", "meta"],
   types: ["movie", "series"],
   catalogs: [
-    { type: "movie",  id: "m3u_movies", name: "🎬 Mis Películas" },
-    { type: "series", id: "m3u_series", name: "📺 Mis Series"    }
+    {
+      type: "movie",
+      id: "m3u_movies",
+      name: "🎬 Mis Películas",
+      // ✅ FIX BÚSQUEDA: declarar soporte para search y skip (paginación)
+      extra: [
+        { name: "search", isRequired: false },
+        { name: "skip",   isRequired: false }
+      ]
+    },
+    {
+      type: "series",
+      id: "m3u_series",
+      name: "📺 Mis Series",
+      extra: [
+        { name: "search", isRequired: false },
+        { name: "skip",   isRequired: false }
+      ]
+    }
   ]
 };
 
 const builder = new addonBuilder(manifest);
 
 // ─────────────────────────────────────────────
-// CATALOG
+// CATALOG  — con filtro de búsqueda
 // ─────────────────────────────────────────────
-builder.defineCatalogHandler(async ({ type, id }) => {
+builder.defineCatalogHandler(async ({ type, id, extra }) => {
+  const search = extra?.search ? normalize(extra.search) : null;
+  const skip   = parseInt(extra?.skip || "0", 10);
+  const PAGE   = 100; // items por página
+
   if (type === "movie" && id === "m3u_movies") {
-    return { metas: movies.map(movieToMeta) };
+    let results = movies;
+
+    // ✅ FIX BÚSQUEDA: filtrar si viene query
+    if (search) {
+      results = movies.filter(m => normalize(m.title).includes(search));
+    }
+
+    return {
+      metas: results
+        .slice(skip, skip + PAGE)
+        .map(movieToMeta)
+    };
   }
+
   if (type === "series" && id === "m3u_series") {
-    return { metas: Object.values(series).map(seriesToMeta) };
+    let results = Object.values(series);
+
+    if (search) {
+      results = results.filter(s => normalize(s.title).includes(search));
+    }
+
+    return {
+      metas: results
+        .slice(skip, skip + PAGE)
+        .map(seriesToMeta)
+    };
   }
+
   return { metas: [] };
 });
 
@@ -176,42 +242,31 @@ builder.defineCatalogHandler(async ({ type, id }) => {
 builder.defineMetaHandler(async ({ type, id }) => {
 
   if (type === "movie") {
-    // Buscar por ID directo, por índice IMDb, o por título normalizado
-    let movie = movies.find(m => m.id === id)
-      || (movieImdbIndex[id] ? movies.find(m => m.id === movieImdbIndex[id]) : null)
+    const slugKey = movieImdbIndex[id] || id;
+    let movie = movies.find(m => m.id === id || m.id === slugKey)
       || movies.find(m => normalize(m.title) === normalize(id));
 
     if (!movie) return { meta: null };
 
-    // Buscar IMDb si aún no lo tenemos
+    // Por si aún no tiene IMDb (llegó antes de que la pre-carga llegara a él)
     if (!movie.id.startsWith("tt")) {
       const imdb = await searchTMDB(movie.title, "movie");
-      if (imdb) {
-        // ✅ FIX #4: Guardar índice cruzado slug → imdb
-        movieImdbIndex[imdb] = movie.id;
-        movie.id = imdb;
-      }
+      if (imdb) { movieImdbIndex[imdb] = movie.id; movie.id = imdb; }
     }
 
     return { meta: movieToFullMeta(movie) };
   }
 
   if (type === "series") {
-    // ✅ FIX #4 & #5: Buscar por slug, por índice IMDb, o por título
     const slugKey = seriesImdbIndex[id] || id;
-    let show = series[slugKey]
+    let show = series[slugKey] || series[id]
       || Object.values(series).find(s => normalize(s.title) === normalize(id));
 
     if (!show) return { meta: null };
 
-    // Buscar IMDb si aún no lo tenemos
     if (!show.id.startsWith("tt")) {
       const imdb = await searchTMDB(show.title, "series");
-      if (imdb) {
-        // ✅ FIX #4: Guardar índice cruzado para que el stream handler funcione
-        seriesImdbIndex[imdb] = show.id; // imdb → slug original
-        show.id = imdb;
-      }
+      if (imdb) { seriesImdbIndex[imdb] = show.id; show.id = imdb; }
     }
 
     return { meta: seriesToFullMeta(show, show.id) };
@@ -226,7 +281,6 @@ builder.defineMetaHandler(async ({ type, id }) => {
 builder.defineStreamHandler(async ({ type, id }) => {
 
   if (type === "movie") {
-    // ✅ FIX #5: Buscar por ID directo O por índice IMDb→slug
     const slugKey = movieImdbIndex[id] || id;
     const movie = movies.find(m => m.id === id || m.id === slugKey)
       || movies.find(m => normalize(m.title) === normalize(id));
@@ -235,39 +289,31 @@ builder.defineStreamHandler(async ({ type, id }) => {
 
     return {
       streams: movie.streams.map(s => ({
-        url: s.url,
-        title: s.language,
-        name: "M3U"
+        url: s.url, title: s.language, name: "M3U"
       }))
     };
   }
 
   if (type === "series") {
-    const parts = id.split(":");
-    const rawSeriesId = parts[0];
-    const season  = parseInt(parts[1], 10);
-    const episode = parseInt(parts[2], 10);
+    const parts     = id.split(":");
+    const rawId     = parts[0];
+    const season    = parseInt(parts[1], 10);
+    const episode   = parseInt(parts[2], 10);
+    const slugKey   = seriesImdbIndex[rawId] || rawId;
 
-    // ✅ FIX #5: Buscar por slug directo, por índice IMDb→slug, o por título
-    const slugKey = seriesImdbIndex[rawSeriesId] || rawSeriesId;
-    const show = series[slugKey]
-      || series[rawSeriesId]
+    const show = series[slugKey] || series[rawId]
       || Object.values(series).find(s =>
-          normalize(s.title) === normalize(rawSeriesId) || s.id === rawSeriesId
+          normalize(s.title) === normalize(rawId) || s.id === rawId
         );
 
     if (!show) return { streams: [] };
 
-    const episodes = show.episodes.filter(
+    const eps = show.episodes.filter(
       e => e.season === season && e.episode === episode
     );
 
     return {
-      streams: episodes.map(ep => ({
-        url: ep.url,
-        title: ep.language,
-        name: "M3U"
-      }))
+      streams: eps.map(ep => ({ url: ep.url, title: ep.language, name: "M3U" }))
     };
   }
 
@@ -309,6 +355,12 @@ function seriesToFullMeta(s, resolvedId) {
 // ─────────────────────────────────────────────
 (async () => {
   await loadList();
+
+  // Arrancar servidor inmediatamente — no esperamos la pre-carga
   serveHTTP(builder.getInterface(), { port: PORT });
   console.log(`🚀 Addon corriendo en puerto ${PORT}`);
+
+  // Pre-carga de IDs TMDB en segundo plano (no bloquea el servidor)
+  console.log("⏳ Iniciando pre-carga de IDs TMDB en segundo plano...");
+  prefetchTMDBIds().catch(err => console.error("❌ Error en pre-carga:", err));
 })();
