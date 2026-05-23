@@ -761,10 +761,10 @@ Seleccionar tu fork (no el repositorio original)
 3. Configurar tus propias variables de entorno
 En tu Web Service de Render, ir a Environment y agregar:
 
-| KEY                  | VALUE                              |
-| -------------------- | ---------------------------------- |
-| `TMDB_API_KEY`       | Tu propia API Key de TMDB          |
-| `M3U_URLS`           | Tus propias URLs de listas M3U     |
+   | KEY                  | VALUE                              |
+   | -------------------- | ---------------------------------- |
+   | `TMDB_API_KEY`       | Tu propia API Key de TMDB          |
+   | `M3U_URLS`           | Tus propias URLs de listas M3U     |
 
 
 4. Instalar en Stremio
