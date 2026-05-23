@@ -156,18 +156,6 @@ TMDB_API_KEY=123abc456def789
 
 ---
 
-
-# Gracias a esto puedes usar:
-
-- listas sin IMDb IDs
-- listas IPTV normales
-- múltiples listas M3U
-- listas nuevas sin reprocesar
-
-sin necesidad de ejecutar `clean-m3u.js` cada vez.
-
----
-
 # ⚠ Importante
 
 TMDB tiene límites de requests por minuto.
@@ -192,7 +180,7 @@ El proyecto debe contener:
 addon.js
 parse-m3u.js
 package.json
-cache.json
+cache.json (debe estar vacio al principio "{}"
 README.md
 ```
 
@@ -290,12 +278,13 @@ npm start
 ## # 🔑 Variables de entorno
 
 ## Una sola lista
+```
 
 | KEY | VALUE |
 |---|---|
 | `M3U_URL` | `https://url/de/tu-lista/iptv/o-m3u/iptv/lista.m3u` |
 ```
-
+```
 ## Varias listas
 
 | KEY | VALUE |
@@ -429,6 +418,154 @@ Este script:
 * guarda progreso automáticamente
 * permite continuar después sin perder avance
 
+# 🔑 Crear API Key de TMDB
+
+1. Crea cuenta en:
+
+[TMDB](https://www.themoviedb.org/signup?utm_source=chatgpt.com)
+
+2. Luego entra a:
+
+[TMDB API Settings](https://www.themoviedb.org/settings/api)
+
+3. Copia tu API Key.
+
+---
+
+# 📦 Instalar dependencias
+
+```bash id="lci4m4"
+npm install axios
+```
+
+---
+
+# ⚙️ Configurar el script
+
+Abre:
+
+```txt id="lci4m5"
+clean-m3u.js
+```
+
+y reemplaza:
+
+```js id="lci4m6"
+const API_KEY = "PON_TU_TMDB_API_KEY";
+```
+
+por tu API real:
+
+```js id="lci4m7"
+const API_KEY = "TU_API_KEY";
+```
+
+---
+
+# 🔑 Configurar Render
+
+Después de obtener tu URL directa, debes agregarla en Render.
+
+Ir a:
+
+```txt
+Render → Web Service → Environment
+```
+
+Agregar:
+
+```env
+M3U_URL=https://tu-link-directo.m3u
+```
+
+o múltiples listas:
+
+```env
+M3U_URLS=https://lista1.m3u,https://lista2.m3u
+```
+
+---
+
+# 🚀 Resultado final
+
+Cuando Render inicie:
+
+- descargará automáticamente la lista
+- parseará películas y series
+- detectará streams
+- agrupará episodios
+- cargará IMDb IDs
+- integrará los streams directamente en Stremio
+
+---
+
+
+# 📁 Archivos usados
+
+| Archivo              | Descripción                        |
+| -------------------- | ---------------------------------- |
+| `lista.m3u`          | Lista original (nunca se modifica) |
+| `lista-progress.m3u` | Lista procesada con IMDb IDs       |
+| `lista-backup.m3u`   | Backup automático                  |
+
+---
+
+# ▶️ Ejecutar el script
+
+Coloca tu lista M3U como:
+
+```txt id="lci4m8"
+lista.m3u
+```
+
+Luego ejecuta:
+
+```bash id="lci4m9"
+node clean-m3u.js
+```
+
+---
+
+# 💾 Guardado automático
+
+El script:
+
+* guarda progreso automáticamente
+* crea backups
+* permite cerrar con `CTRL + C`
+* continúa donde quedó la próxima vez
+
+---
+
+# 🧠 Compatibilidad de series
+
+El script detecta automáticamente:
+
+```txt id="lci4ma"
+S01E01
+S02E05
+etc
+```
+
+y usa el IMDb ID correcto de toda la serie.
+
+---
+
+# ✅ Resultado esperado
+
+Antes:
+
+```txt id="lci4mb"
+#EXTINF:-1 tvg-name="Breaking Bad S01E01",Breaking Bad S01E01
+```
+
+Después:
+
+```txt id="lci4mc"
+#EXTINF:-1 tvg-name="Breaking Bad" tvg-id="tt0903747",Breaking Bad
+```
+
+---
 
 # 🌐 Usar tu lista M3U procesada en Render
 
@@ -460,11 +597,11 @@ Ejemplo correcto:
 
 ```txt
 https://servidor.com/lista.m3u
-
+```
 Ejemplo incorrecto:
-
+```txt
 https://drive.google.com/file/d/xxxxx/view
-
+```
 Porque esa URL abre una página web y NO el archivo directamente.
 
 # 📦 GitHub Releases (Recomendado)
@@ -590,177 +727,6 @@ Ahí podrás encontrar la URL real/directa del archivo.
 
 ---
 
-# 🔑 Configurar Render
-
-Después de obtener tu URL directa, debes agregarla en Render.
-
-Ir a:
-
-```txt
-Render → Web Service → Environment
-```
-
-Agregar:
-
-```env
-M3U_URL=https://tu-link-directo.m3u
-```
-
-o múltiples listas:
-
-```env
-M3U_URLS=https://lista1.m3u,https://lista2.m3u
-```
-
----
-
-# 🚀 Resultado final
-
-Cuando Render inicie:
-
-- descargará automáticamente la lista
-- parseará películas y series
-- detectará streams
-- agrupará episodios
-- cargará IMDb IDs
-- integrará los streams directamente en Stremio
-
----
-
-# 🔑 Crear API Key de TMDB
-
-1. Crea cuenta en:
-
-[TMDB](https://www.themoviedb.org/signup?utm_source=chatgpt.com)
-
-2. Luego entra a:
-
-[TMDB API Settings](https://www.themoviedb.org/settings/api)
-
-3. Copia tu API Key.
-
----
-
-# 📦 Instalar dependencias
-
-```bash id="lci4m4"
-npm install axios
-```
-
----
-
-# ⚙️ Configurar el script
-
-Abre:
-
-```txt id="lci4m5"
-clean-m3u.js
-```
-
-y reemplaza:
-
-```js id="lci4m6"
-const API_KEY = "PON_TU_TMDB_API_KEY";
-```
-
-por tu API real:
-
-```js id="lci4m7"
-const API_KEY = "TU_API_KEY";
-```
-
----
-
-# 📁 Archivos usados
-
-| Archivo              | Descripción                        |
-| -------------------- | ---------------------------------- |
-| `lista.m3u`          | Lista original (nunca se modifica) |
-| `lista-progress.m3u` | Lista procesada con IMDb IDs       |
-| `lista-backup.m3u`   | Backup automático                  |
-
----
-
-# ▶️ Ejecutar el script
-
-Coloca tu lista M3U como:
-
-```txt id="lci4m8"
-lista.m3u
-```
-
-Luego ejecuta:
-
-```bash id="lci4m9"
-node clean-m3u.js
-```
-
----
-
-# 💾 Guardado automático
-
-El script:
-
-* guarda progreso automáticamente
-* crea backups
-* permite cerrar con `CTRL + C`
-* continúa donde quedó la próxima vez
-
----
-
-# 🧠 Compatibilidad de series
-
-El script detecta automáticamente:
-
-```txt id="lci4ma"
-S01E01
-S02E05
-etc
-```
-
-y usa el IMDb ID correcto de toda la serie.
-
----
-
-# ✅ Resultado esperado
-
-Antes:
-
-```txt id="lci4mb"
-#EXTINF:-1 tvg-name="Breaking Bad S01E01",Breaking Bad S01E01
-```
-
-Después:
-
-```txt id="lci4mc"
-#EXTINF:-1 tvg-name="Breaking Bad" tvg-id="tt0903747",Breaking Bad
-```
-
----
-
-# 🚀 Usar la lista procesada en Render
-
-Después de terminar:
-
-1. Sube:
-
-```txt id="lci4md"
-lista-progress.m3u
-```
-
-a:
-
-- GitHub Releases
-- servidor directo
-- hosting M3U
-
-2. Usa el link directo en Render:
-
-```env id="lci4me"
-M3U_URL=https://tu-link-directo.m3u
-```
-
----
 
 # 🔄 Actualizar la lista
 
