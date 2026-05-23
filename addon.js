@@ -169,7 +169,7 @@ async function loadList() {
       if (!response.ok) { console.error(`❌ HTTP ${response.status}: ${url}`); continue; }
       const items = parseM3U(await response.text());
       console.log(`📺 ${items.length} items en ${url}`);
-      allItems.push(...items);
+      allItems = allItems.concat(items); // ✅ concat no desborda el call stack con listas grandes
     } catch (err) {
       console.error(`❌ Error descargando ${url}:`, err.message);
     }
