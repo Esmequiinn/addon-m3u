@@ -1,256 +1,141 @@
-const fs =
-  require("fs");
-
-const {
-  addonBuilder,
-  serveHTTP
-} = require("stremio-addon-sdk");
+const { addonBuilder, serveHTTP } =
+  require("stremio-addon-sdk");
 
 const {
   parseM3U,
-  groupContent,
-  slugify
+  groupContent
 } = require("./parse-m3u");
 
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 // CONFIG
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 
 const PORT =
   process.env.PORT || 7000;
 
+// MULTI URLS
 const M3U_URLS =
   process.env.M3U_URLS
-    ?.split(",")
-    .map(u => u.trim())
-    .filter(Boolean) || [];
+    ? process.env.M3U_URLS
+        .split(",")
+        .map(u => u.trim())
+    : [];
 
-const TMDB_KEY =
-  process.env.TMDB_KEY;
+const SINGLE_URL =
+  process.env.M3U_URL;
 
-// ─────────────────────────────
+if (
+  SINGLE_URL &&
+  !M3U_URLS.includes(SINGLE_URL)
+) {
+  M3U_URLS.push(SINGLE_URL);
+}
 
 if (!M3U_URLS.length) {
 
   console.error(
-    "❌ No hay M3U_URLS"
+    "❌ No configuraste M3U_URL o M3U_URLS"
   );
 
   process.exit(1);
 }
 
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 // STORAGE
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 
 let movies = [];
 
 let series = {};
 
-let cache = {};
+// ─────────────────────────────────────────────
+// LOAD LISTS
+// ─────────────────────────────────────────────
 
-if (fs.existsSync("cache.json")) {
-
-  cache =
-    JSON.parse(
-      fs.readFileSync(
-        "cache.json",
-        "utf8"
-      )
-    );
-}
-
-// ─────────────────────────────
-// LOAD ALL LISTS
-// ─────────────────────────────
-
-async function loadList(url) {
+async function loadList() {
 
   try {
 
-    console.log(
-      `📥 Descargando:\n${url}`
-    );
+    let allItems = [];
 
-    const res =
-      await fetch(url);
+    for (const url of M3U_URLS) {
 
-    if (!res.ok) {
-
-      throw new Error(
-        `HTTP ${res.status}`
+      console.log(
+        `📥 Descargando: ${url}`
       );
+
+      const response =
+        await fetch(url);
+
+      if (!response.ok) {
+
+        console.log(
+          `❌ Error HTTP ${response.status}`
+        );
+
+        continue;
+      }
+
+      const raw =
+        await response.text();
+
+      console.log(
+        `📦 Tamaño: ${raw.length}`
+      );
+
+      const items =
+        parseM3U(raw);
+
+      console.log(
+        `📺 Items encontrados: ${items.length}`
+      );
+
+      allItems.push(...items);
     }
 
-    const raw =
-      await res.text();
-
     console.log(
-      `📦 Tamaño: ${raw.length}`
+      `🎬 Total items: ${allItems.length}`
     );
 
-    const items =
-      parseM3U(raw);
+    const grouped =
+      groupContent(allItems);
+
+    movies =
+      grouped.movies;
+
+    series =
+      grouped.series;
 
     console.log(
-      `📺 Items: ${items.length}`
+      `✅ Lista cargada: ${movies.length} películas, ${Object.keys(series).length} series`
     );
-
-    return items;
 
   } catch (err) {
 
     console.error(
-      `❌ Error lista:\n${url}`
+      "❌ Error cargando listas:"
     );
 
     console.error(
       err.message
     );
-
-    return [];
   }
 }
 
-// ─────────────────────────────
-// LOAD EVERYTHING
-// ─────────────────────────────
-
-async function loadAllLists() {
-
-  let allItems = [];
-
-  for (const url of M3U_URLS) {
-
-    const items =
-      await loadList(url);
-
-    allItems =
-      allItems.concat(items);
-  }
-
-  console.log(
-    `📦 TOTAL ITEMS: ${allItems.length}`
-  );
-
-  const grouped =
-    groupContent(allItems);
-
-  movies =
-    grouped.movies;
-
-  series =
-    grouped.series;
-
-  console.log(
-    `✅ ${movies.length} películas`
-  );
-
-  console.log(
-    `✅ ${Object.keys(series).length} series`
-  );
-}
-
-// ─────────────────────────────
-// TMDB SEARCH
-// ─────────────────────────────
-
-async function searchTMDB(
-  title,
-  type = "movie"
-) {
-
-  if (!TMDB_KEY) {
-    return null;
-  }
-
-  const slug =
-    slugify(title);
-
-  if (cache[slug]) {
-
-    return cache[slug];
-  }
-
-  try {
-
-    const endpoint =
-      type === "series"
-        ? "tv"
-        : "movie";
-
-    const url =
-      `https://api.themoviedb.org/3/search/${endpoint}?api_key=${TMDB_KEY}&query=${encodeURIComponent(title)}&language=es-MX`;
-
-    const res =
-      await fetch(url);
-
-    const data =
-      await res.json();
-
-    if (
-      !data.results ||
-      !data.results.length
-    ) {
-
-      return null;
-    }
-
-    const first =
-      data.results[0];
-
-    const extRes =
-      await fetch(
-        `https://api.themoviedb.org/3/${endpoint}/${first.id}/external_ids?api_key=${TMDB_KEY}`
-      );
-
-    const ext =
-      await extRes.json();
-
-    if (!ext.imdb_id) {
-
-      return null;
-    }
-
-    cache[slug] =
-      ext.imdb_id;
-
-    fs.writeFileSync(
-      "cache.json",
-
-      JSON.stringify(
-        cache,
-        null,
-        2
-      )
-    );
-
-    console.log(
-      `💾 Cacheado: ${title}`
-    );
-
-    return ext.imdb_id;
-
-  } catch {
-
-    return null;
-  }
-}
-
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 // MANIFEST
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 
 const manifest = {
 
-  id: "com.m3u.global",
+  id: "com.esmequinn.m3u",
 
   version: "2.0.0",
 
-  name: "Mi Lista M3U",
+  name: "M3U",
 
   description:
-    "M3U Multi Lista",
+    "Addon IPTV M3U para Stremio",
 
   logo:
     "https://i.imgur.com/qKMZMBx.png",
@@ -273,7 +158,14 @@ const manifest = {
 
       id: "m3u_movies",
 
-      name: "Mis Películas"
+      name: "Mis Películas",
+
+      extra: [
+        {
+          name: "search",
+          isRequired: false
+        }
+      ]
     },
 
     {
@@ -281,63 +173,83 @@ const manifest = {
 
       id: "m3u_series",
 
-      name: "Mis Series"
+      name: "Mis Series",
+
+      extra: [
+        {
+          name: "search",
+          isRequired: false
+        }
+      ]
     }
-  ]
+  ],
+
+  behaviorHints: {
+    adult: false,
+    p2p: false
+  }
 };
 
 const builder =
   new addonBuilder(manifest);
 
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 // CATALOG
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 
 builder.defineCatalogHandler(
-  ({ type, id }) => {
+  ({ type, id, extra }) => {
 
+    const search =
+      extra?.search
+        ?.toLowerCase() || null;
+
+    // MOVIES
     if (
       type === "movie" &&
       id === "m3u_movies"
     ) {
 
+      let metas =
+        movies.map(movieToMeta);
+
+      if (search) {
+
+        metas =
+          metas.filter(m =>
+            m.name
+              .toLowerCase()
+              .includes(search)
+          );
+      }
+
       return Promise.resolve({
-
-        metas:
-          movies.map(m => ({
-
-            id: m.id,
-
-            type: "movie",
-
-            name: m.title,
-
-            poster:
-              m.poster
-          }))
+        metas
       });
     }
 
+    // SERIES
     if (
       type === "series" &&
       id === "m3u_series"
     ) {
 
+      let metas =
+        Object.values(series)
+          .map(seriesToMeta);
+
+      if (search) {
+
+        metas =
+          metas.filter(m =>
+            m.name
+              .toLowerCase()
+              .includes(search)
+          );
+      }
+
       return Promise.resolve({
-
-        metas:
-          Object.values(series)
-            .map(s => ({
-
-              id: s.id,
-
-              type: "series",
-
-              name: s.title,
-
-              poster:
-                s.poster
-            }))
+        metas
       });
     }
 
@@ -347,107 +259,14 @@ builder.defineCatalogHandler(
   }
 );
 
-// ─────────────────────────────
-// STREAMS
-// ─────────────────────────────
-
-builder.defineStreamHandler(
-  async ({ type, id }) => {
-
-    // MOVIES
-    if (type === "movie") {
-
-      const movie =
-        movies.find(
-          m => m.id === id
-        );
-
-      if (!movie) {
-
-        return {
-          streams: []
-        };
-      }
-
-      return {
-
-        streams:
-
-          movie.streams.map(s => ({
-
-            url: s.url,
-
-            title:
-              s.language,
-
-            name: "M3U"
-          }))
-      };
-    }
-
-    // SERIES
-    if (type === "series") {
-
-      const parts =
-        id.split(":");
-
-      const seriesId =
-        parts[0];
-
-      const season =
-        parseInt(parts[1]);
-
-      const episode =
-        parseInt(parts[2]);
-
-      const show =
-        series[seriesId];
-
-      if (!show) {
-
-        return {
-          streams: []
-        };
-      }
-
-      const episodes =
-        show.episodes.filter(
-          e =>
-
-            e.season === season &&
-
-            e.episode === episode
-        );
-
-      return {
-
-        streams:
-
-          episodes.map(ep => ({
-
-            url: ep.url,
-
-            title:
-              ep.language,
-
-            name: "M3U"
-          }))
-      };
-    }
-
-    return {
-      streams: []
-    };
-  }
-);
-
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 // META
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 
 builder.defineMetaHandler(
   ({ type, id }) => {
 
+    // MOVIES
     if (type === "movie") {
 
       const movie =
@@ -464,20 +283,12 @@ builder.defineMetaHandler(
 
       return Promise.resolve({
 
-        meta: {
-
-          id: movie.id,
-
-          type: "movie",
-
-          name: movie.title,
-
-          poster:
-            movie.poster
-        }
+        meta:
+          movieToFullMeta(movie)
       });
     }
 
+    // SERIES
     if (type === "series") {
 
       const show =
@@ -490,38 +301,10 @@ builder.defineMetaHandler(
         });
       }
 
-      const videos =
-        show.episodes.map(ep => ({
-
-          id:
-            `${id}:${ep.season}:${ep.episode}`,
-
-          title:
-            `S${String(ep.season).padStart(2, "0")}E${String(ep.episode).padStart(2, "0")}`,
-
-          season:
-            ep.season,
-
-          episode:
-            ep.episode
-        }));
-
       return Promise.resolve({
 
-        meta: {
-
-          id,
-
-          type: "series",
-
-          name:
-            show.title,
-
-          poster:
-            show.poster,
-
-          videos
-        }
+        meta:
+          seriesToFullMeta(show, id)
       });
     }
 
@@ -531,13 +314,205 @@ builder.defineMetaHandler(
   }
 );
 
-// ─────────────────────────────
+// ─────────────────────────────────────────────
+// STREAMS
+// ─────────────────────────────────────────────
+
+builder.defineStreamHandler(
+  ({ type, id }) => {
+
+    // MOVIES
+    if (type === "movie") {
+
+      const movie =
+        movies.find(
+          m => m.id === id
+        );
+
+      if (!movie) {
+
+        return Promise.resolve({
+          streams: []
+        });
+      }
+
+      return Promise.resolve({
+
+        streams:
+
+          movie.streams.map(s => ({
+
+            url: s.url,
+
+            title:
+              `${s.language}`,
+
+            name: "M3U"
+          }))
+      });
+    }
+
+    // SERIES
+    if (type === "series") {
+
+      const parts =
+        id.split(":");
+
+      const seriesId =
+        parts[0];
+
+      const season =
+        parseInt(parts[1], 10);
+
+      const episode =
+        parseInt(parts[2], 10);
+
+      const show =
+        series[seriesId];
+
+      if (!show) {
+
+        return Promise.resolve({
+          streams: []
+        });
+      }
+
+      const episodes =
+
+        show.episodes.filter(
+          e =>
+            e.season === season &&
+            e.episode === episode
+        );
+
+      if (!episodes.length) {
+
+        return Promise.resolve({
+          streams: []
+        });
+      }
+
+      return Promise.resolve({
+
+        streams:
+
+          episodes.map(ep => ({
+
+            url: ep.url,
+
+            title:
+              `${ep.language}`,
+
+            name: "M3U"
+          }))
+      });
+    }
+
+    return Promise.resolve({
+      streams: []
+    });
+  }
+);
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+
+function movieToMeta(m) {
+
+  return {
+
+    id: m.id,
+
+    type: "movie",
+
+    name: m.title,
+
+    poster: m.poster,
+
+    genres:
+      m.genres || []
+  };
+}
+
+function movieToFullMeta(m) {
+
+  return {
+
+    ...movieToMeta(m),
+
+    description:
+      "Película desde lista M3U"
+  };
+}
+
+function seriesToMeta(s) {
+
+  return {
+
+    id: s.id,
+
+    type: "series",
+
+    name: s.title,
+
+    poster: s.poster,
+
+    genres:
+      s.genres || []
+  };
+}
+
+function seriesToFullMeta(s, id) {
+
+  const seasons = {};
+
+  s.episodes.forEach(ep => {
+
+    if (!seasons[ep.season]) {
+
+      seasons[ep.season] = [];
+    }
+
+    seasons[ep.season].push({
+
+      id:
+        `${id}:${ep.season}:${ep.episode}`,
+
+      title:
+        ep.title,
+
+      season:
+        ep.season,
+
+      number:
+        ep.episode
+    });
+  });
+
+  return {
+
+    id,
+
+    type: "series",
+
+    name: s.title,
+
+    poster: s.poster,
+
+    videos:
+      Object.values(seasons)
+        .flat()
+  };
+}
+
+// ─────────────────────────────────────────────
 // START
-// ─────────────────────────────
+// ─────────────────────────────────────────────
 
 (async () => {
 
-  await loadAllLists();
+  await loadList();
 
   serveHTTP(
     builder.getInterface(),
@@ -545,6 +520,10 @@ builder.defineMetaHandler(
   );
 
   console.log(
-    `🚀 Addon puerto ${PORT}`
+    `🚀 Addon corriendo en puerto ${PORT}`
+  );
+
+  console.log(
+    `📡 Manifest: /manifest.json`
   );
 })();
