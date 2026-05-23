@@ -75,6 +75,20 @@ function extractAttr(str, attr) {
   return m ? m[1].trim() : null;
 }
 
+
+// ─────────────────────────────────────────────
+// Limpia un título de atributos M3U embebidos accidentalmente
+// Ej: "Stranger Things tvg-id=\"tt4574334\"" → "Stranger Things"
+// ─────────────────────────────────────────────
+function cleanTitle(str = "") {
+  return str
+    .replace(/tvg-[a-z-]+=\"[^"]*\"/gi, "")  // tvg-id="..." tvg-name="..."
+    .replace(/group-title=\"[^"]*\"/gi, "")    // group-title="..."
+    .replace(/[A-Za-z-]+=\"[^"]*\"/gi, "")     // cualquier attr="valor"
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ─────────────────────────────────────────────
 // ✅ detectLanguage mejorado
 // Recibe todos los campos disponibles para tener más contexto
@@ -204,7 +218,8 @@ function groupContent(items) {
       // ✅ Pasar todos los campos a detectLanguage
       const lang =
         detectLanguage(item.title, item.tvgName, item.group, item.tvgLanguage || "") ||
-        item.title; // si no detecta nada, usar el título completo como etiqueta
+        cleanTitle(item.title) ||
+        "Ver"; // fallback final si el título también estaba vacío
 
       series[seriesId].episodes.push({
         season,
@@ -236,7 +251,8 @@ function groupContent(items) {
       // ✅ Pasar todos los campos a detectLanguage
       const lang =
         detectLanguage(item.title, item.tvgName, item.group, item.tvgLanguage || "") ||
-        item.title; // si no detecta nada, usar el título completo como etiqueta
+        cleanTitle(item.title) ||
+        "🎬 Ver"; // fallback final si el título también estaba vacío
 
       moviesMap[movieId].streams.push({
         url: item.url,
