@@ -613,8 +613,6 @@ para forzar descarga directa.
 
 ---
 
----
-
 # Resultado final
 
 Cuando Render inicie:
