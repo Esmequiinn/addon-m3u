@@ -345,14 +345,6 @@ http://servidor.com/movie.m3u8
 
 ## Series
 
-Las series deben contener:
-
-```txt
-S01E01
-```
-
-Ejemplo:
-
 ```txt
 #EXTINF:-1 tvg-name="Breaking Bad S01E01" group-title="Series",Breaking Bad S01E01
 http://servidor.com/episode1.m3u8
