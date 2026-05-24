@@ -309,8 +309,8 @@ builder.defineStreamHandler(async ({ type, id }) => {
     if (!movie) return { streams: [] };
 
     return {
-      streams: movie.streams.map(s => ({
-        url: s.url, name: "M3U"
+      streams: movie.streams.map((s, i) => ({
+        url: s.url, name: "M3U", title: `Stream ${i + 1}`
       }))
     };
   }
@@ -334,7 +334,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
     );
 
     return {
-      streams: eps.map(ep => ({ url: ep.url, name: "M3U" }))
+      streams: eps.map((ep, i) => ({ url: ep.url, name: "M3U", title: `Stream ${i + 1}` }))
     };
   }
 
