@@ -1,35 +1,65 @@
 /**
  * parse-m3u.js
- * Detecta películas/series
- * Ignora canales IPTV
- * Compatible con:
- * S01E01
- * S01 E01
- * 1x01
- * 01x01
+ * Detecta películas y series, ignora canales IPTV
+ *
+ * Formatos de episodio soportados:
+ *   S01E01 / S01 E01
+ *   1x01 / 01x01
+ *   T01E01 (español)
+ *   Temporada 1 Episodio 1
+ *   Capitulo 1 / Cap 1
  */
 
-const SERIES_KEYWORDS = [
-  "serie",
-  "series",
-  "show",
-  "temporada",
-  "season",
-  "tv"
+// ─────────────────────────────────────────────
+// REGEX EPISODIOS
+// Cubre todos los formatos comunes
+// ─────────────────────────────────────────────
+const SEASON_EP_RE = new RegExp(
+  // S01E01 / S01 E01
+  "(?:[Ss](\\d{1,2})\\s*[Ee](\\d{1,2}))" +
+  // T01E01 (español)
+  "|(?:[Tt](\\d{1,2})\\s*[Ee](\\d{1,2}))" +
+  // 1x01 / 01x01
+  "|(?:(\\d{1,2})x(\\d{1,2}))" +
+  // Temporada 1 Episodio 1
+  "|(?:temporada\\s*(\\d{1,2})\\s*(?:episodio|ep|cap[ií]tulo|cap)\\.?\\s*(\\d{1,2}))",
+  "i"
+);
+
+// ─────────────────────────────────────────────
+// KEYWORDS grupos de series/pelis
+// ─────────────────────────────────────────────
+const SERIES_GROUP_KEYWORDS = [
+  "serie", "series", "show", "shows",
+  "temporada", "season", "novela", "anime",
+  "dorama", "miniserie"
 ];
 
-// ✅ AHORA SOPORTA:
-// S01E01
-// S01 E01
-// 1x01
-// 01x01
-const SEASON_EP_RE =
-  /(?:[Ss](\d{1,2})\s*[Ee](\d{1,2}))|(?:(\d{1,2})x(\d{1,2}))/i;
+const MOVIE_GROUP_KEYWORDS = [
+  "peli", "pelicula", "película", "peliculas", "películas",
+  "movie", "movies", "film", "films", "cine",
+  "estreno", "estrenos", "4k", "hd", "bluray",
+  "latino", "castellano", "español", "dubbed"
+];
+
+// ─────────────────────────────────────────────
+// KEYWORDS grupos que son CLARAMENTE canales de TV
+// Solo los muy específicos — no palabras que aparezcan en títulos
+// ─────────────────────────────────────────────
+const CHANNEL_GROUP_KEYWORDS = [
+  "tv en vivo", "live tv", "canales en vivo",
+  "canales", "channels", "live channels",
+  "noticias", "news", "deportes en vivo",
+  "sports live", "radio", "musica en vivo",
+  "adult", "xxx", "18+", "24h", "24/7"
+];
+
+// Patrones de URL que indican stream en vivo (NO grabaciones)
+const LIVE_URL_RE = /\/(live|stream|iptv|livetv|channel)\//i;
 
 // ─────────────────────────────────────────────
 
 function slugify(str) {
-
   return str
     .toLowerCase()
     .replace(/\s+/g, "_")
@@ -40,33 +70,22 @@ function slugify(str) {
 // ─────────────────────────────────────────────
 
 function parseM3U(raw) {
-
-  const lines =
-    raw
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(Boolean);
+  const lines = raw
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean);
 
   const items = [];
-
   let current = null;
 
   for (const line of lines) {
-
     if (line.startsWith("#EXTINF")) {
-
       current = parseExtInf(line);
-
     } else if (line.startsWith("#")) {
-
       continue;
-
     } else if (current) {
-
       current.url = line;
-
       items.push(current);
-
       current = null;
     }
   }
@@ -77,394 +96,190 @@ function parseM3U(raw) {
 // ─────────────────────────────────────────────
 
 function parseExtInf(line) {
-
-  const titleMatch =
-    line.match(/,(.+)$/);
-
-  const title =
-    titleMatch
-      ? titleMatch[1].trim()
-      : "Sin título";
-
-  const logo =
-    extractAttr(line, "tvg-logo") ||
-    extractAttr(line, "tvg-logo-url") ||
-    null;
-
-  const group =
-    extractAttr(line, "group-title") ||
-    "";
-
-  const tvgName =
-    extractAttr(line, "tvg-name") ||
-    title;
-
-  const tvgId =
-    extractAttr(line, "tvg-id") ||
-    null;
-
-  const tvgLanguage =
-    extractAttr(line, "tvg-language") ||
-    null;
+  const titleMatch = line.match(/,(.+)$/);
+  const title = titleMatch ? titleMatch[1].trim() : "Sin título";
 
   return {
-
     title,
-    logo,
-    group,
-    tvgName,
-    tvgId,
-    tvgLanguage,
-    url: null
+    logo:        extractAttr(line, "tvg-logo") || extractAttr(line, "tvg-logo-url") || null,
+    group:       extractAttr(line, "group-title") || "",
+    tvgName:     extractAttr(line, "tvg-name") || title,
+    tvgId:       extractAttr(line, "tvg-id") || null,
+    tvgLanguage: extractAttr(line, "tvg-language") || null,
+    url:         null
   };
 }
 
 // ─────────────────────────────────────────────
 
 function extractAttr(str, attr) {
-
-  const re =
-    new RegExp(`${attr}="([^"]*)"`, "i");
-
-  const m =
-    str.match(re);
-
-  return m
-    ? m[1].trim()
-    : null;
+  const re = new RegExp(`${attr}="([^"]*)"`, "i");
+  const m = str.match(re);
+  return m ? m[1].trim() : null;
 }
 
 // ─────────────────────────────────────────────
-// LIMPIAR TÍTULOS
+// cleanTitle
+// Elimina atributos M3U, calidad, idioma del texto del título
 // ─────────────────────────────────────────────
-
 function cleanTitle(str = "") {
-
   return str
-
-    .replace(/tvg-[a-z-]+=\"[^"]*\"/gi, "")
-
-    .replace(/group-title=\"[^"]*\"/gi, "")
-
-    .replace(/[A-Za-z-]+=\"[^"]*\"/gi, "")
-
-    .replace(
-      /1080p|720p|2160p|4k|hdr|webrip|bluray|x264|x265/gi,
-      ""
-    )
-
-    .replace(
-      /latino|castellano|dual|subtitulado|sub/gi,
-      ""
-    )
-
+    .replace(/tvg-[a-z-]+="[^"]*"/gi, "")
+    .replace(/group-title="[^"]*"/gi, "")
+    .replace(/[a-z-]+="[^"]*"/gi, "")
+    .replace(/\b(19|20)\d{2}\b/g, m => `__YEAR_${m}__`) // preservar año temporalmente
+    .replace(/1080p|720p|2160p|4k|hdr|webrip|bluray|x264|x265|hevc|avc/gi, "")
+    .replace(/latino|castellano|dual|subtitulado|sub\b/gi, "")
+    .replace(/__YEAR_(\d{4})__/g, "$1") // restaurar año
     .replace(/\s+/g, " ")
-
     .trim();
 }
 
 // ─────────────────────────────────────────────
-// IGNORAR CANALES IPTV
+// hasYear — detecta si el título contiene un año de producción
+// Señal fuerte de que es película o serie, no canal
 // ─────────────────────────────────────────────
-
-function isLiveChannel(item) {
-
-  const all =
-    `${item.title} ${item.group} ${item.tvgName}`
-      .toLowerCase();
-
-  // grupos típicos de TV
-  const CHANNEL_GROUPS = [
-
-    "tv en vivo",
-    "live tv",
-    "channels",
-    "canales",
-    "deportes",
-    "sports",
-    "noticias",
-    "news",
-    "adult",
-    "xxx",
-    "music",
-    "radio",
-    "documentales",
-    "24/7"
-  ];
-
-  // nombres típicos de canales
-  const CHANNEL_NAMES = [
-
-    "hbo",
-    "espn",
-    "fox",
-    "cnn",
-    "disney channel",
-    "cartoon network",
-    "nickelodeon",
-    "mtv",
-    "discovery",
-    "natgeo",
-    "tnt",
-    "warner",
-    "cinecanal",
-    "canal",
-    "tv"
-  ];
-
-  // stream TS típico IPTV
-  const isTS =
-    item.url?.includes(".ts");
-
-  // grupo IPTV
-  const hasGroup =
-    CHANNEL_GROUPS.some(
-      g => all.includes(g)
-    );
-
-  // nombre IPTV
-  const hasChannelName =
-    CHANNEL_NAMES.some(
-      c => all.includes(c)
-    );
-
-  return (
-    hasGroup ||
-    hasChannelName ||
-    isTS
-  );
+function hasYear(str) {
+  return /\b(19[5-9]\d|20[0-2]\d)\b/.test(str);
 }
 
 // ─────────────────────────────────────────────
-// DETECTAR IDIOMAS
+// classifyItem — decide qué es cada item
+// Retorna: "series" | "movie" | "channel" | "unknown"
+//
+// Orden de prioridad:
+//  1. ¿Tiene patrón de episodio?         → series (certeza alta)
+//  2. ¿Grupo claramente de canal?        → channel
+//  3. ¿Grupo claramente de serie?        → series
+//  4. ¿Grupo claramente de película?     → movie
+//  5. ¿Tiene año en el título?           → movie (probabilidad alta)
+//  6. ¿URL de live stream?               → channel
+//  7. Sin suficiente info               → unknown (se descarta)
 // ─────────────────────────────────────────────
+function classifyItem(item) {
+  const allText = `${item.title} ${item.tvgName} ${item.group}`.toLowerCase();
+  const groupLow = item.group.toLowerCase();
 
-function detectLanguage(
-  title = "",
-  tvgName = "",
-  group = "",
-  tvgLanguage = ""
-) {
+  // 1. Patrón de episodio → serie segura
+  const epMatch =
+    SEASON_EP_RE.exec(item.title) ||
+    SEASON_EP_RE.exec(item.tvgName);
 
-  const all =
-    `${title} ${tvgName} ${group} ${tvgLanguage}`
-      .toLowerCase();
+  if (epMatch) return { type: "series", match: epMatch };
 
-  const langs = [];
-
-  if (
-    /\blatin[oa]?\b/.test(all) ||
-    /\blat\b/.test(all)
-  ) {
-    langs.push("🌎 Latino");
+  // 2. Grupo claramente de canal de TV
+  if (CHANNEL_GROUP_KEYWORDS.some(kw => groupLow.includes(kw))) {
+    return { type: "channel" };
   }
 
-  if (
-    /\bcastellano\b/.test(all) ||
-    /\bespan[oó]l\b/.test(all) ||
-    /\besp\b/.test(all)
-  ) {
-    langs.push("🇪🇸 Castellano");
+  // 3. Grupo claramente de serie
+  if (SERIES_GROUP_KEYWORDS.some(kw => groupLow.includes(kw))) {
+    return { type: "series", match: null };
   }
 
-  if (
-    /\benglish\b/.test(all) ||
-    /\bingl[eé]s\b/.test(all) ||
-    /\beng\b/.test(all)
-  ) {
-    langs.push("🇺🇸 Inglés");
+  // 4. Grupo claramente de película
+  if (MOVIE_GROUP_KEYWORDS.some(kw => groupLow.includes(kw))) {
+    return { type: "movie" };
   }
 
-  if (
-    /\bmulti\b/.test(all) ||
-    /\bdual\b/.test(all)
-  ) {
-    langs.push("🌐 Multi");
+  // 5. Año en el título → probablemente película
+  if (hasYear(allText)) {
+    return { type: "movie" };
   }
 
-  if (!langs.length) {
-    return "🎬 Stream";
+  // 6. URL de stream en vivo
+  if (item.url && LIVE_URL_RE.test(item.url)) {
+    return { type: "channel" };
   }
 
-  return langs.join(" • ");
+  // 7. Sin señales suficientes → descartar
+  return { type: "unknown" };
 }
 
 // ─────────────────────────────────────────────
-// GROUP CONTENT
+// groupContent
 // ─────────────────────────────────────────────
-
 function groupContent(items) {
-
   const moviesMap = {};
-
   const series = {};
 
+  let countChannel = 0;
+  let countUnknown = 0;
+
   for (const item of items) {
+    const { type, match: seMatch } = classifyItem(item);
 
-    // ✅ IGNORAR CANALES
-    if (isLiveChannel(item)) {
-      continue;
-    }
+    if (type === "channel") { countChannel++; continue; }
+    if (type === "unknown") { countUnknown++; continue; }
 
-    const seMatch =
-      SEASON_EP_RE.exec(item.title) ||
-      SEASON_EP_RE.exec(item.tvgName);
+    // ─────────────────────────────
+    // SERIES
+    // ─────────────────────────────
+    if (type === "series" && seMatch) {
+      // Extraer temporada y episodio del grupo correcto según qué rama del regex coincidió
+      const season  = parseInt(seMatch[1] || seMatch[3] || seMatch[5] || seMatch[7], 10);
+      const episode = parseInt(seMatch[2] || seMatch[4] || seMatch[6] || seMatch[8], 10);
 
-    const groupLower =
-      item.group.toLowerCase();
+      if (isNaN(season) || isNaN(episode)) continue;
 
-    const isSeries =
-      seMatch ||
-      SERIES_KEYWORDS.some(
-        kw => groupLower.includes(kw)
+      const rawName = cleanTitle(
+        (item.tvgName || item.title)
+          .replace(SEASON_EP_RE, "")
+          .replace(/[-–_.\s]+$/, "")
+          .trim()
       );
 
-    // ─────────────────────────────────────────
-    // SERIES
-    // ─────────────────────────────────────────
-
-    if (isSeries && seMatch) {
-
-      // ✅ SOPORTA S01E01 y 1x01
-      const season =
-        parseInt(
-          seMatch[1] || seMatch[3],
-          10
-        );
-
-      const episode =
-        parseInt(
-          seMatch[2] || seMatch[4],
-          10
-        );
-
-      const rawName =
-        cleanTitle(
-          (item.tvgName || item.title)
-            .replace(SEASON_EP_RE, "")
-            .replace(/[-–_.\s]+$/, "")
-            .trim()
-        );
-
       const seriesId =
-
-        item.tvgId &&
-        item.tvgId.startsWith("tt")
-
+        item.tvgId && item.tvgId.startsWith("tt")
           ? item.tvgId
-
           : slugify(rawName);
 
       if (!series[seriesId]) {
-
         series[seriesId] = {
-
-          id: seriesId,
-
-          title: rawName,
-
-          poster:
-            item.logo || null,
-
-          genres:
-            item.group
-              ? [item.group]
-              : [],
-
+          id:     seriesId,
+          title:  rawName,
+          poster: item.logo || null,
+          genres: item.group ? [item.group] : [],
           episodes: []
         };
       }
 
-      const lang =
-        detectLanguage(
-          item.title,
-          item.tvgName,
-          item.group,
-          item.tvgLanguage
-        );
-
-      series[seriesId]
-        .episodes
-        .push({
-
-          season,
-
-          episode,
-
-          title:
-            `S${pad(season)}E${pad(episode)}`,
-
-          url: item.url,
-
-          language: lang
-        });
+      series[seriesId].episodes.push({
+        season,
+        episode,
+        title: `S${pad(season)}E${pad(episode)}`,
+        url:   item.url
+      });
 
     } else {
-
-      // ───────────────────────────────────────
-      // MOVIES
-      // ───────────────────────────────────────
+      // ─────────────────────────────
+      // PELÍCULAS
+      // ─────────────────────────────
+      const cleanedTitle = cleanTitle(item.tvgName || item.title);
 
       const movieId =
-
-        item.tvgId &&
-        item.tvgId.startsWith("tt")
-
+        item.tvgId && item.tvgId.startsWith("tt")
           ? item.tvgId
-
-          : slugify(
-              cleanTitle(
-                item.tvgName || item.title
-              )
-            );
+          : slugify(cleanedTitle);
 
       if (!moviesMap[movieId]) {
-
         moviesMap[movieId] = {
-
-          id: movieId,
-
-          title:
-            cleanTitle(
-              item.tvgName || item.title
-            ),
-
-          poster:
-            item.logo || null,
-
-          genres:
-            item.group
-              ? [item.group]
-              : [],
-
+          id:     movieId,
+          title:  cleanedTitle,
+          poster: item.logo || null,
+          genres: item.group ? [item.group] : [],
           streams: []
         };
       }
 
-      const lang =
-        detectLanguage(
-          item.title,
-          item.tvgName,
-          item.group,
-          item.tvgLanguage
-        );
-
-      moviesMap[movieId]
-        .streams
-        .push({
-
-          url: item.url,
-
-          language: lang
-        });
+      moviesMap[movieId].streams.push({ url: item.url });
     }
   }
 
+  console.log(`🚫 Canales ignorados: ${countChannel} | ❓ Sin clasificar (descartados): ${countUnknown}`);
+
   return {
-
-    movies:
-      Object.values(moviesMap),
-
+    movies: Object.values(moviesMap),
     series
   };
 }
@@ -472,13 +287,7 @@ function groupContent(items) {
 // ─────────────────────────────────────────────
 
 function pad(n) {
-
   return String(n).padStart(2, "0");
 }
 
-module.exports = {
-
-  parseM3U,
-
-  groupContent
-};
+module.exports = { parseM3U, groupContent };
