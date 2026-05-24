@@ -40,7 +40,7 @@ Si una película tiene varios streams stremio mostrará varios resultados autom�
 
 ---
 
-## ✅ Fallback automático por nombre
+## Fallback automático por nombre
 
 Ahora el addon puede funcionar incluso si una lista NO tiene IMDb IDs.
 
@@ -62,13 +62,13 @@ el addon:
 
 Gracias a esto:
 
-✅ funcionan listas sin IMDb  
-✅ funcionan listas nuevas  
-✅ puedes mezclar listas  
+   - funcionan listas sin IMDb  
+   - funcionan listas nuevas  
+   - puedes mezclar listas  
 
 ---
 
-## ✅ Integración global con Stremio
+## Integración global con Stremio
 
 El addon soporta:
 
@@ -78,7 +78,7 @@ El addon soporta:
 
 ---
 
-## ✅ Resolución automática de IDs IMDb al arrancar
+## Resolución automática de IDs IMDb al arrancar
 
 
 El addon resuelve los IDs de IMDb directamente en Render sin necesidad de modificar tu lista M3U manualmente.
@@ -92,7 +92,7 @@ Si la pre-carga aún no ha llegado a un título concreto, el addon lo resuelve e
 
 ---
 
-✅ Cache automático
+ Cache automático
 El addon guarda en memoria todos los IDs que ya resolvió para no volver a consultarlos.
 Ejemplo:
 
@@ -332,7 +332,7 @@ El addon crea:
 
 ---
 
-# 🎞 Formato compatible del M3U
+# Formato compatible del M3U
 
 ## Películas
 
@@ -360,7 +360,7 @@ http://servidor.com/episode1.m3u8
 
 ---
 
-# 🎯 Integración global con IMDb IDs
+# Integración global con IMDb IDs
 
 El addon soporta:
 
@@ -370,10 +370,10 @@ tvg-id="tt1234567"
 
 Gracias a esto:
 
-✅ aparecen streams en resultados oficiales  
-✅ funciona con Cinemeta  
-✅ mejor matching automático  
-✅ integración global con Stremio
+   - aparecen streams en resultados oficiales  
+   - funciona con Cinemeta  
+   - mejor matching automático  
+   - integración global con Stremio
 
 ---
 
@@ -406,7 +406,7 @@ Este script:
 
 ---
 
-# 📦 Instalar dependencias
+# Instalar dependencias
 
 ```bash id="lci4m4"
 npm install axios
@@ -414,7 +414,7 @@ npm install axios
 
 ---
 
-# ⚙️ Configurar el script
+# Configurar el script
 
 Abre:
 
@@ -436,7 +436,7 @@ const API_KEY = "TU_API_KEY";
 
 ---
 
-# ▶️ Ejecutar el script
+# Ejecutar el script
 
 Coloca tu lista M3U como:
 
@@ -463,7 +463,7 @@ El script:
 
 ---
 
-# 🧠 Compatibilidad de series
+# Compatibilidad de series
 
 El script detecta automáticamente:
 
@@ -477,7 +477,7 @@ y usa el IMDb ID correcto de toda la serie.
 
 ---
 
-# ✅ Resultado esperado
+# Resultado esperado
 
 Antes:
 
@@ -501,7 +501,7 @@ El addon descargará automáticamente la lista desde esa URL cada vez que Render
 
 ---
 
-# ✅ Servicios recomendados
+# Servicios recomendados
 
 Puedes alojar tu lista M3U en:
 
@@ -530,7 +530,7 @@ https://drive.google.com/file/d/xxxxx/view
 ```
 Porque esa URL abre una página web y NO el archivo directamente.
 
-# 📦 GitHub Releases (Recomendado)
+# GitHub Releases (Recomendado)
 
 La forma más estable y sencilla de alojar tu lista M3U es usando GitHub Releases.
 
@@ -613,49 +613,9 @@ para forzar descarga directa.
 
 ---
 
-# 🛠 Modo desarrollador para obtener enlaces directos
-
-En algunos servicios como Google Drive o Dropbox puedes usar el modo desarrollador del navegador para verificar si realmente estás obteniendo el archivo directo.
-
-## Cómo hacerlo
-
-1. Abrir el enlace
-2. Presionar:
-
-```txt
-F12
-```
-
-o:
-
-```txt
-Ctrl + Shift + I
-```
-
-3. Ir a:
-
-```txt
-Network
-```
-
-4. Recargar la página
-
-5. Buscar:
-
-```txt
-.m3u
-download
-usercontent
-uc?export=download
-```
-
-Ahí podrás encontrar la URL real/directa del archivo.
-
 ---
 
----
-
-# 🚀 Resultado final
+# Resultado final
 
 Cuando Render inicie:
 
@@ -713,20 +673,6 @@ Para reiniciar:
 El plan gratuito de Render puede dormir el servidor después de inactividad.
 
 El primer stream o apertura puede tardar algunos segundos.
-
-# 🔥 Resultado final
-
-Con este sistema:
-
-✅ múltiples listas M3U  
-✅ múltiples streams  
-✅ detección automática de idiomas  
-✅ integración global con Stremio  
-✅ soporte IMDb  
-✅ fallback automático  
-✅ compatibilidad con Cinemeta  
-✅ cache automático  
-✅ streams dentro de películas oficiales de Stremio
 
 ---
 # Hacer tu propio addon con Fork
