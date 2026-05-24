@@ -1,6 +1,12 @@
 /**
  * parse-m3u.js
- * Multi-stream + idiomas mejorado
+ * Detecta películas/series
+ * Ignora canales IPTV
+ * Compatible con:
+ * S01E01
+ * S01 E01
+ * 1x01
+ * 01x01
  */
 
 const SERIES_KEYWORDS = [
@@ -12,10 +18,18 @@ const SERIES_KEYWORDS = [
   "tv"
 ];
 
-const SEASON_EP_RE = /[Ss](\d{1,2})[Ee](\d{1,2})/;
+// ✅ AHORA SOPORTA:
+// S01E01
+// S01 E01
+// 1x01
+// 01x01
+const SEASON_EP_RE =
+  /(?:[Ss](\d{1,2})\s*[Ee](\d{1,2}))|(?:(\d{1,2})x(\d{1,2}))/i;
 
 // ─────────────────────────────────────────────
+
 function slugify(str) {
+
   return str
     .toLowerCase()
     .replace(/\s+/g, "_")
@@ -24,23 +38,35 @@ function slugify(str) {
 }
 
 // ─────────────────────────────────────────────
+
 function parseM3U(raw) {
-  const lines = raw
-    .split(/\r?\n/)
-    .map(l => l.trim())
-    .filter(Boolean);
+
+  const lines =
+    raw
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean);
 
   const items = [];
+
   let current = null;
 
   for (const line of lines) {
+
     if (line.startsWith("#EXTINF")) {
+
       current = parseExtInf(line);
+
     } else if (line.startsWith("#")) {
+
       continue;
+
     } else if (current) {
+
       current.url = line;
+
       items.push(current);
+
       current = null;
     }
   }
@@ -49,227 +75,410 @@ function parseM3U(raw) {
 }
 
 // ─────────────────────────────────────────────
+
 function parseExtInf(line) {
-  const titleMatch = line.match(/,(.+)$/);
-  const title = titleMatch ? titleMatch[1].trim() : "Sin título";
+
+  const titleMatch =
+    line.match(/,(.+)$/);
+
+  const title =
+    titleMatch
+      ? titleMatch[1].trim()
+      : "Sin título";
 
   const logo =
     extractAttr(line, "tvg-logo") ||
     extractAttr(line, "tvg-logo-url") ||
     null;
 
-  const group = extractAttr(line, "group-title") || "";
-  const tvgName = extractAttr(line, "tvg-name") || title;
-  const tvgId = extractAttr(line, "tvg-id") || null;
+  const group =
+    extractAttr(line, "group-title") ||
+    "";
 
-  // ✅ También extraemos tvg-language si viene en la línea
-  const tvgLanguage = extractAttr(line, "tvg-language") || null;
+  const tvgName =
+    extractAttr(line, "tvg-name") ||
+    title;
 
-  return { title, logo, group, tvgName, tvgId, tvgLanguage, url: null };
+  const tvgId =
+    extractAttr(line, "tvg-id") ||
+    null;
+
+  const tvgLanguage =
+    extractAttr(line, "tvg-language") ||
+    null;
+
+  return {
+
+    title,
+    logo,
+    group,
+    tvgName,
+    tvgId,
+    tvgLanguage,
+    url: null
+  };
 }
 
 // ─────────────────────────────────────────────
+
 function extractAttr(str, attr) {
-  const re = new RegExp(`${attr}="([^"]*)"`, "i");
-  const m = str.match(re);
-  return m ? m[1].trim() : null;
+
+  const re =
+    new RegExp(`${attr}="([^"]*)"`, "i");
+
+  const m =
+    str.match(re);
+
+  return m
+    ? m[1].trim()
+    : null;
 }
 
+// ─────────────────────────────────────────────
+// LIMPIAR TÍTULOS
+// ─────────────────────────────────────────────
 
-// ─────────────────────────────────────────────
-// Limpia un título de atributos M3U embebidos accidentalmente
-// Ej: "Stranger Things tvg-id=\"tt4574334\"" → "Stranger Things"
-// ─────────────────────────────────────────────
 function cleanTitle(str = "") {
+
   return str
-    .replace(/tvg-[a-z-]+=\"[^"]*\"/gi, "")  // tvg-id="..." tvg-name="..."
-    .replace(/group-title=\"[^"]*\"/gi, "")    // group-title="..."
-    .replace(/[A-Za-z-]+=\"[^"]*\"/gi, "")     // cualquier attr="valor"
+
+    .replace(/tvg-[a-z-]+=\"[^"]*\"/gi, "")
+
+    .replace(/group-title=\"[^"]*\"/gi, "")
+
+    .replace(/[A-Za-z-]+=\"[^"]*\"/gi, "")
+
+    .replace(
+      /1080p|720p|2160p|4k|hdr|webrip|bluray|x264|x265/gi,
+      ""
+    )
+
+    .replace(
+      /latino|castellano|dual|subtitulado|sub/gi,
+      ""
+    )
+
     .replace(/\s+/g, " ")
+
     .trim();
 }
 
 // ─────────────────────────────────────────────
-// ✅ detectLanguage mejorado
-// Recibe todos los campos disponibles para tener más contexto
-// Detecta abreviaciones, corchetes, paréntesis, guiones y códigos de idioma
+// IGNORAR CANALES IPTV
 // ─────────────────────────────────────────────
-function detectLanguage(title = "", tvgName = "", group = "", tvgLanguage = "") {
-  // Unir todo en un solo string para buscar en cualquier campo
-  const all = `${title} ${tvgName} ${group} ${tvgLanguage}`.toLowerCase();
 
-  // ── LATINO ──────────────────────────────────
-  // Patrones: latino, lat, [lat], (lat), - lat, latam, spa-419
-  const isLatino =
+function isLiveChannel(item) {
+
+  const all =
+    `${item.title} ${item.group} ${item.tvgName}`
+      .toLowerCase();
+
+  // grupos típicos de TV
+  const CHANNEL_GROUPS = [
+
+    "tv en vivo",
+    "live tv",
+    "channels",
+    "canales",
+    "deportes",
+    "sports",
+    "noticias",
+    "news",
+    "adult",
+    "xxx",
+    "music",
+    "radio",
+    "documentales",
+    "24/7"
+  ];
+
+  // nombres típicos de canales
+  const CHANNEL_NAMES = [
+
+    "hbo",
+    "espn",
+    "fox",
+    "cnn",
+    "disney channel",
+    "cartoon network",
+    "nickelodeon",
+    "mtv",
+    "discovery",
+    "natgeo",
+    "tnt",
+    "warner",
+    "cinecanal",
+    "canal",
+    "tv"
+  ];
+
+  // stream TS típico IPTV
+  const isTS =
+    item.url?.includes(".ts");
+
+  // grupo IPTV
+  const hasGroup =
+    CHANNEL_GROUPS.some(
+      g => all.includes(g)
+    );
+
+  // nombre IPTV
+  const hasChannelName =
+    CHANNEL_NAMES.some(
+      c => all.includes(c)
+    );
+
+  return (
+    hasGroup ||
+    hasChannelName ||
+    isTS
+  );
+}
+
+// ─────────────────────────────────────────────
+// DETECTAR IDIOMAS
+// ─────────────────────────────────────────────
+
+function detectLanguage(
+  title = "",
+  tvgName = "",
+  group = "",
+  tvgLanguage = ""
+) {
+
+  const all =
+    `${title} ${tvgName} ${group} ${tvgLanguage}`
+      .toLowerCase();
+
+  const langs = [];
+
+  if (
     /\blatin[oa]?\b/.test(all) ||
-    /\blat\b/.test(all) ||
-    /\[lat\]/.test(all) ||
-    /\(lat\)/.test(all) ||
-    /\blatam\b/.test(all) ||
-    /spa.?419/.test(all) ||
-    /\bes.?la\b/.test(all);
+    /\blat\b/.test(all)
+  ) {
+    langs.push("🌎 Latino");
+  }
 
-  // ── CASTELLANO / ESPAÑOL ────────────────────
-  // Patrones: castellano, español, esp, spa, [esp], (esp), - esp, es-es
-  const isCastellano =
+  if (
     /\bcastellano\b/.test(all) ||
     /\bespan[oó]l\b/.test(all) ||
-    /\besp\b/.test(all) ||
-    /\[esp\]/.test(all) ||
-    /\(esp\)/.test(all) ||
-    /\bspa\b/.test(all) ||
-    /\bes\.es\b/.test(all) ||
-    /\bes-es\b/.test(all);
+    /\besp\b/.test(all)
+  ) {
+    langs.push("🇪🇸 Castellano");
+  }
 
-  // ── INGLÉS ──────────────────────────────────
-  // Patrones: english, inglés, ingles, eng, [eng], (eng), - eng
-  const isIngles =
+  if (
     /\benglish\b/.test(all) ||
     /\bingl[eé]s\b/.test(all) ||
-    /\beng\b/.test(all) ||
-    /\[eng\]/.test(all) ||
-    /\(eng\)/.test(all) ||
-    /\ben\b/.test(all) && !/\bgen\b/.test(all) && !/\bben\b/.test(all);
+    /\beng\b/.test(all)
+  ) {
+    langs.push("🇺🇸 Inglés");
+  }
 
-  // ── PORTUGUÉS ───────────────────────────────
-  const isPortugues =
-    /\bportugu[eé]s\b/.test(all) ||
-    /\bport\b/.test(all) ||
-    /\bpor\b/.test(all) ||
-    /\[por\]/.test(all) ||
-    /\(por\)/.test(all) ||
-    /\bpt\b/.test(all) ||
-    /\bbr\b/.test(all);
-
-  // ── FRANCÉS ─────────────────────────────────
-  const isFrances =
-    /\bfranc[eé]s\b/.test(all) ||
-    /\bfre\b/.test(all) ||
-    /\bfra\b/.test(all) ||
-    /\[fra\]/.test(all);
-
-  // ── MULTI / DUAL ────────────────────────────
-  const isMulti =
+  if (
     /\bmulti\b/.test(all) ||
-    /\bdual\b/.test(all) ||
-    /\bmul\b/.test(all) ||
-    /\[mul\]/.test(all) ||
-    /\(mul\)/.test(all);
+    /\bdual\b/.test(all)
+  ) {
+    langs.push("🌐 Multi");
+  }
 
-  // Construir resultado con los idiomas encontrados
-  const langs = [];
-  if (isLatino)    langs.push("🌎 Latino");
-  if (isCastellano) langs.push("🇪🇸 Castellano");
-  if (isIngles)    langs.push("🇺🇸 Inglés");
-  if (isPortugues) langs.push("🇧🇷 Portugués");
-  if (isFrances)   langs.push("🇫🇷 Francés");
-  if (isMulti)     langs.push("🌐 Multi");
-
-  // ✅ Si no se detectó nada, no asumir "Multi" —
-  // devolver vacío para que en addon.js se muestre el título original
-  if (langs.length === 0) return null;
+  if (!langs.length) {
+    return "🎬 Stream";
+  }
 
   return langs.join(" • ");
 }
 
 // ─────────────────────────────────────────────
+// GROUP CONTENT
+// ─────────────────────────────────────────────
+
 function groupContent(items) {
+
   const moviesMap = {};
+
   const series = {};
 
   for (const item of items) {
+
+    // ✅ IGNORAR CANALES
+    if (isLiveChannel(item)) {
+      continue;
+    }
+
     const seMatch =
       SEASON_EP_RE.exec(item.title) ||
       SEASON_EP_RE.exec(item.tvgName);
 
-    const groupLower = item.group.toLowerCase();
+    const groupLower =
+      item.group.toLowerCase();
 
     const isSeries =
       seMatch ||
-      SERIES_KEYWORDS.some(kw => groupLower.includes(kw));
+      SERIES_KEYWORDS.some(
+        kw => groupLower.includes(kw)
+      );
 
     // ─────────────────────────────────────────
     // SERIES
     // ─────────────────────────────────────────
-    if (isSeries && seMatch) {
-      const season  = parseInt(seMatch[1], 10);
-      const episode = parseInt(seMatch[2], 10);
 
-      const rawName = (item.tvgName || item.title)
-        .replace(SEASON_EP_RE, "")
-        .replace(/[-–_.\s]+$/, "")
-        .trim();
+    if (isSeries && seMatch) {
+
+      // ✅ SOPORTA S01E01 y 1x01
+      const season =
+        parseInt(
+          seMatch[1] || seMatch[3],
+          10
+        );
+
+      const episode =
+        parseInt(
+          seMatch[2] || seMatch[4],
+          10
+        );
+
+      const rawName =
+        cleanTitle(
+          (item.tvgName || item.title)
+            .replace(SEASON_EP_RE, "")
+            .replace(/[-–_.\s]+$/, "")
+            .trim()
+        );
 
       const seriesId =
-        item.tvgId && item.tvgId.startsWith("tt")
+
+        item.tvgId &&
+        item.tvgId.startsWith("tt")
+
           ? item.tvgId
+
           : slugify(rawName);
 
       if (!series[seriesId]) {
+
         series[seriesId] = {
+
           id: seriesId,
+
           title: rawName,
-          poster: item.logo || null,
-          genres: item.group ? [item.group] : [],
+
+          poster:
+            item.logo || null,
+
+          genres:
+            item.group
+              ? [item.group]
+              : [],
+
           episodes: []
         };
       }
 
-      // ✅ Pasar todos los campos a detectLanguage
       const lang =
-        detectLanguage(item.title, item.tvgName, item.group, item.tvgLanguage || "") ||
-        cleanTitle(item.title) ||
-        "Ver"; // fallback final si el título también estaba vacío
+        detectLanguage(
+          item.title,
+          item.tvgName,
+          item.group,
+          item.tvgLanguage
+        );
 
-      series[seriesId].episodes.push({
-        season,
-        episode,
-        title: `S${pad(season)}E${pad(episode)}`,
-        url: item.url,
-        language: lang
-      });
+      series[seriesId]
+        .episodes
+        .push({
+
+          season,
+
+          episode,
+
+          title:
+            `S${pad(season)}E${pad(episode)}`,
+
+          url: item.url,
+
+          language: lang
+        });
 
     } else {
+
       // ───────────────────────────────────────
       // MOVIES
       // ───────────────────────────────────────
+
       const movieId =
-        item.tvgId && item.tvgId.startsWith("tt")
+
+        item.tvgId &&
+        item.tvgId.startsWith("tt")
+
           ? item.tvgId
-          : slugify(item.tvgName || item.title);
+
+          : slugify(
+              cleanTitle(
+                item.tvgName || item.title
+              )
+            );
 
       if (!moviesMap[movieId]) {
+
         moviesMap[movieId] = {
+
           id: movieId,
-          title: item.tvgName || item.title,
-          poster: item.logo || null,
-          genres: item.group ? [item.group] : [],
+
+          title:
+            cleanTitle(
+              item.tvgName || item.title
+            ),
+
+          poster:
+            item.logo || null,
+
+          genres:
+            item.group
+              ? [item.group]
+              : [],
+
           streams: []
         };
       }
 
-      // ✅ Pasar todos los campos a detectLanguage
       const lang =
-        detectLanguage(item.title, item.tvgName, item.group, item.tvgLanguage || "") ||
-        cleanTitle(item.title) ||
-        "🎬 Ver"; // fallback final si el título también estaba vacío
+        detectLanguage(
+          item.title,
+          item.tvgName,
+          item.group,
+          item.tvgLanguage
+        );
 
-      moviesMap[movieId].streams.push({
-        url: item.url,
-        language: lang
-      });
+      moviesMap[movieId]
+        .streams
+        .push({
+
+          url: item.url,
+
+          language: lang
+        });
     }
   }
 
   return {
-    movies: Object.values(moviesMap),
+
+    movies:
+      Object.values(moviesMap),
+
     series
   };
 }
 
 // ─────────────────────────────────────────────
+
 function pad(n) {
+
   return String(n).padStart(2, "0");
 }
 
-module.exports = { parseM3U, groupContent };
+module.exports = {
+
+  parseM3U,
+
+  groupContent
+};
