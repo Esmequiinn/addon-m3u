@@ -135,6 +135,16 @@ function cleanTitle(str = "") {
     .trim();
 }
 
+// Limpia título para buscar en TMDB — elimina paréntesis/corchetes
+// que son etiquetas del proveedor: (Trial Audio), (CAST.), [HD], etc.
+function cleanTitleForTMDB(str = "") {
+  return str
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ─────────────────────────────────────────────
 // hasYear — detecta si el título contiene un año de producción
 // Señal fuerte de que es película o serie, no canal
@@ -222,11 +232,13 @@ function groupContent(items) {
 
       if (isNaN(season) || isNaN(episode)) continue;
 
-      const rawName = cleanTitle(
-        (item.tvgName || item.title)
-          .replace(SEASON_EP_RE, "")
-          .replace(/[-–_.\s]+$/, "")
-          .trim()
+      const rawName = cleanTitleForTMDB(
+        cleanTitle(
+          (item.tvgName || item.title)
+            .replace(SEASON_EP_RE, "")
+            .replace(/[-–_.\s]+$/, "")
+            .trim()
+        )
       );
 
       const seriesId =
@@ -290,4 +302,4 @@ function pad(n) {
   return String(n).padStart(2, "0");
 }
 
-module.exports = { parseM3U, groupContent };
+module.exports = { parseM3U, groupContent, cleanTitleForTMDB };
