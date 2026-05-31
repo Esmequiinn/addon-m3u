@@ -150,22 +150,34 @@ async function loadList() {
 }
 
 // ─────────────────────────────────────────────
-// KEEP-ALIVE — ping interno cada 14 min
-// Usa http nativo para no depender de rutas externas
-// Esto evita que el prefetch TMDB se interrumpa
+// KEEP-ALIVE
+// - Espera 5 segundos antes del primer ping
+//   para dar tiempo al servidor de estar listo
+// - Corre en un setInterval independiente
+//   que NO se ve afectado por el prefetch TMDB
+// - Si el ping falla, lo loguea pero sigue intentando
 // ─────────────────────────────────────────────
 function startKeepAlive() {
-  setInterval(() => {
+  function doPing() {
     const req = http.get(`http://localhost:${PORT}/manifest.json`, res => {
       console.log(`💓 Keep-alive OK (${res.statusCode})`);
       res.resume();
     });
     req.on("error", err => {
-      console.error(`❌ Keep-alive error:`, err.message);
+      console.error(`❌ Keep-alive error: ${err.message}`);
     });
     req.end();
-  }, 14 * 60 * 1000);
-  console.log(`💓 Keep-alive iniciado (cada 14 min)`);
+  }
+
+  // Primer ping después de 5 segundos (servidor ya listo)
+  setTimeout(() => {
+    console.log("💓 Primer ping keep-alive...");
+    doPing();
+    // Pings siguientes cada 14 minutos
+    setInterval(doPing, 14 * 60 * 1000);
+  }, 5000);
+
+  console.log("💓 Keep-alive configurado (primer ping en 5s, luego cada 14 min)");
 }
 
 const manifest = {
@@ -315,9 +327,10 @@ function seriesToFullMeta(s, resolvedId) {
   serveHTTP(builder.getInterface(), { port: PORT });
   console.log(`🚀 Addon corriendo en puerto ${PORT}`);
 
-  // Keep-alive ANTES del prefetch — así el server ya está listo
+  // Keep-alive DESPUÉS de serveHTTP, espera 5s antes del primer ping
   startKeepAlive();
 
+  // Prefetch TMDB corre en paralelo sin bloquear nada
   console.log("⏳ Iniciando pre-carga de IDs TMDB en segundo plano...");
   prefetchTMDBIds().catch(err => console.error("❌ Error en pre-carga:", err));
 })();
