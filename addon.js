@@ -1,5 +1,6 @@
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 const { parseM3U, groupContent, cleanTitleForTMDB } = require("./parse-m3u");
+const http = require("http");
 
 const LOGO_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'>
   <defs>
@@ -104,8 +105,10 @@ async function prefetchTMDBIds() {
   let resolvedMovies = 0;
   for (const batch of chunks(movieList, 4)) {
     await Promise.all(batch.map(async movie => {
-      const imdb = await searchTMDB(movie.title, "movie");
-      if (imdb) { movieImdbIndex[imdb] = movie.id; movie.id = imdb; resolvedMovies++; }
+      try {
+        const imdb = await searchTMDB(movie.title, "movie");
+        if (imdb) { movieImdbIndex[imdb] = movie.id; movie.id = imdb; resolvedMovies++; }
+      } catch {}
     }));
     console.log(`🎬 Películas resueltas: ${resolvedMovies}/${movieList.length}`);
     await sleep(400);
@@ -115,8 +118,10 @@ async function prefetchTMDBIds() {
   let resolvedSeries = 0;
   for (const batch of chunks(seriesList, 4)) {
     await Promise.all(batch.map(async show => {
-      const imdb = await searchTMDB(show.title, "series");
-      if (imdb) { seriesImdbIndex[imdb] = show.id; show.id = imdb; resolvedSeries++; }
+      try {
+        const imdb = await searchTMDB(show.title, "series");
+        if (imdb) { seriesImdbIndex[imdb] = show.id; show.id = imdb; resolvedSeries++; }
+      } catch {}
     }));
     console.log(`📺 Series resueltas: ${resolvedSeries}/${seriesList.length}`);
     await sleep(400);
@@ -145,18 +150,22 @@ async function loadList() {
 }
 
 // ─────────────────────────────────────────────
-// KEEP-ALIVE — ping cada 14 min para evitar
-// que Render duerma el servicio en plan gratuito
+// KEEP-ALIVE — ping interno cada 14 min
+// Usa http nativo para no depender de rutas externas
+// Esto evita que el prefetch TMDB se interrumpa
 // ─────────────────────────────────────────────
-function startKeepAlive(baseUrl) {
-  setInterval(async () => {
-    try {
-      await fetch(`${baseUrl}/manifest.json`);
-      console.log(`💓 Keep-alive OK`);
-    } catch (err) {
+function startKeepAlive() {
+  setInterval(() => {
+    const req = http.get(`http://localhost:${PORT}/manifest.json`, res => {
+      console.log(`💓 Keep-alive OK (${res.statusCode})`);
+      res.resume();
+    });
+    req.on("error", err => {
       console.error(`❌ Keep-alive error:`, err.message);
-    }
+    });
+    req.end();
   }, 14 * 60 * 1000);
+  console.log(`💓 Keep-alive iniciado (cada 14 min)`);
 }
 
 const manifest = {
@@ -171,7 +180,7 @@ const manifest = {
     {
       type:  "movie",
       id:    "m3u_movies",
-      name:  "Mis Películas",
+      name:  "🎬 Mis Películas",
       extra: [
         { name: "search", isRequired: false },
         { name: "skip",   isRequired: false }
@@ -180,7 +189,7 @@ const manifest = {
     {
       type:  "series",
       id:    "m3u_series",
-      name:  "Mis Series",
+      name:  "📺 Mis Series",
       extra: [
         { name: "search", isRequired: false },
         { name: "skip",   isRequired: false }
@@ -303,16 +312,11 @@ function seriesToFullMeta(s, resolvedId) {
 
 (async () => {
   await loadList();
-
   serveHTTP(builder.getInterface(), { port: PORT });
   console.log(`🚀 Addon corriendo en puerto ${PORT}`);
 
-  // Keep-alive usando URL pública de Render
-  const publicUrl = process.env.RENDER_EXTERNAL_URL;
-  if (publicUrl) {
-    console.log(`💓 Keep-alive iniciado: ${publicUrl}`);
-    startKeepAlive(publicUrl);
-  }
+  // Keep-alive ANTES del prefetch — así el server ya está listo
+  startKeepAlive();
 
   console.log("⏳ Iniciando pre-carga de IDs TMDB en segundo plano...");
   prefetchTMDBIds().catch(err => console.error("❌ Error en pre-carga:", err));
